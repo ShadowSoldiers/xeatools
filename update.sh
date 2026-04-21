@@ -77,17 +77,31 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 # ── Pull update ──────────────────────────────────────────────
-echo -e "${CYAN}Mengunduh update...${NC}"
+echo ""
+echo -e "${CYAN}Mengunduh update dari GitHub...${NC}"
 git remote set-url origin "$REPO_URL_WITH_TOKEN"
-git pull origin main --quiet
 
-if [ $? -eq 0 ]; then
+# Set strategi pull agar tidak perlu konfirmasi interaktif
+git config pull.rebase true 2>/dev/null
+
+git pull origin main --rebase --quiet 2>&1
+PULL_STATUS=$?
+
+if [ $PULL_STATUS -eq 0 ]; then
   NEW=$(git rev-parse HEAD | cut -c1-7)
   echo -e "${GREEN}✓ Update berhasil! ${LOCAL} → ${NEW}${NC}"
   echo ""
-  echo -e "${YELLOW}Restart merge_web.py untuk menerapkan perubahan.${NC}"
+  echo -e "${YELLOW}⚠  Restart merge_web.py untuk menerapkan perubahan.${NC}"
+  echo "   Jalankan: pkill -f merge_web.py && cd $INSTALL_DIR && python merge_web.py &"
 else
-  echo -e "${RED}✗ Update gagal. Coba jalankan ulang.${NC}"
+  echo -e "${RED}✗ Update gagal. Memulihkan dari backup...${NC}"
+  # Batalkan rebase jika masih berlangsung
+  git rebase --abort 2>/dev/null || true
+  # Kembalikan config jika ada
+  if [ -f "${CONFIG_FILE}.bak" ]; then
+    cp "${CONFIG_FILE}.bak" "$CONFIG_FILE"
+    echo -e "${GREEN}✓ Konfigurasi dipulihkan dari backup.${NC}"
+  fi
   exit 1
 fi
 echo ""

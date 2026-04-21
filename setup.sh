@@ -72,6 +72,8 @@ if [ $? -ne 0 ]; then
   echo -e "${RED}✗ Clone gagal. Periksa token dan koneksi internet.${NC}"
   exit 1
 fi
+# Set strategi pull default agar update.sh tidak butuh konfirmasi
+git -C "$INSTALL_DIR" config pull.rebase true
 echo -e "${GREEN}✓ Repository berhasil di-clone ke ${INSTALL_DIR}${NC}"
 echo ""
 
