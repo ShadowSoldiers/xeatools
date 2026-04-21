@@ -32,6 +32,8 @@ DEFAULT_CONFIG = {
     "source_dir"      : "/sdcard/Documents",
     "output_dir"      : "/sdcard/Documents/Hasil",
     "digit_count"     : 6,
+    "xea_username"    : "",
+    "xea_password"    : "",
     "sender_email"    : "",
     "sender_password" : "",
     "to"              : [],
@@ -43,6 +45,9 @@ DEFAULT_CONFIG = {
         "{daftar_pelanggan}\n\nTerlampir {jumlah_file} file PDF.\n\n"
         "Email ini dikirim otomatis oleh script merge_pdf."
     ),
+    "schedule_enabled": False,
+    "schedule_time"   : "08:00",
+    "schedule_days"   : [1, 2, 3, 4, 5],
 }
 
 def load_config() -> dict:
