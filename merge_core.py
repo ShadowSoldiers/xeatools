@@ -258,6 +258,11 @@ def save_merge_log(summary: dict, file_kosong: list) -> Path:
              "Juli","Agustus","September","Oktober","November","Desember"]
     return f"{bulan[dt.month]} {dt.year}"
 
+def nama_bulan_indonesia(dt: datetime) -> str:
+    bulan = ["","Januari","Februari","Maret","April","Mei","Juni",
+             "Juli","Agustus","September","Oktober","November","Desember"]
+    return f"{bulan[dt.month]} {dt.year}"
+
 def pindah_file_mentah(source_dir: str, moved_pairs: list) -> tuple:
     folder_bulan = nama_bulan_indonesia(datetime.now())
     target_dir   = Path(source_dir) / folder_bulan
