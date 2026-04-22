@@ -70,7 +70,7 @@ def save_config(cfg: dict):
 # KONSTANTA
 # ─────────────────────────────────────────────────────────────
 TAG_FIRST  = "STBA"
-TAG_SECOND = "STATS"
+TAG_SECOND = "STAT"   # nama file dari API adalah _STAT, bukan _STATS
 
 TIPE_LAYANAN_MAP = {
     "Install"          : "Install",
@@ -98,8 +98,13 @@ SMTP_PORT = 465
 # ─────────────────────────────────────────────────────────────
 
 def extract_key(filename: str, n: int) -> str:
-    stem      = Path(filename).stem
-    alnum     = re.sub(r"[^A-Za-z0-9]", "", stem)
+    stem = Path(filename).stem
+    # Hapus suffix tipe dokumen agar STBA dan STAT punya key yang sama
+    for suffix in ("_STBA", "_STAT", "_STATS"):
+        if stem.upper().endswith(suffix):
+            stem = stem[:-len(suffix)]
+            break
+    alnum = re.sub(r"[^A-Za-z0-9]", "", stem)
     return alnum[-n:].upper() if len(alnum) >= n else None
 
 def detect_tag(path: Path) -> str:
