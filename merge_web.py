@@ -1286,11 +1286,11 @@ def api_apply_update():
                        cwd=work, capture_output=True, check=True)
         new_ver = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], cwd=work).decode().strip()
-        # Restart server di background setelah response dikirim
+        # Exit dengan kode 42 → start_manual.sh akan restart otomatis
         def restart():
-            import time, signal
+            import time
             time.sleep(1)
-            os.kill(os.getpid(), signal.SIGTERM)
+            os._exit(42)
         threading.Thread(target=restart, daemon=True).start()
         return jsonify({"ok": True, "version": new_ver})
     except subprocess.CalledProcessError as e:
