@@ -135,7 +135,7 @@ def extract_stba_info(stba_path: Path) -> tuple:
                     if m: tipe = m.group(1).strip()
                 if serial == "-":
                     m = re.search(
-                        r"(?:Serial\s*(?:Number|No\.?)|No\.?\s*[Ss]erial|Nomor\s*[Ss]eri(?:al)?)\s*:\s*(.+)",
+                        r"(?:Nomor\s+Seri\s+Perangkat|Serial\s*(?:Number|No\.?)|No\.?\s*[Ss]erial|Nomor\s*[Ss]eri(?:al)?)\s*:\s*(.+)",
                         line, re.IGNORECASE)
                     if m: serial = m.group(1).strip()
                 if nama != "-" and tipe != "-" and serial != "-":
@@ -207,7 +207,48 @@ def save_ringkasan_total(out_root: Path, summary: dict, file_kosong: list) -> Pa
         f.write("\n".join(lines))
     return txt_path
 
-def nama_bulan_indonesia(dt: datetime) -> str:
+def save_merge_log(summary: dict, file_kosong: list) -> Path:
+    """
+    Simpan log merge per tipe layanan ke /sdcard/Documents/log_merge.txt.
+    Log bersifat append — tidak bisa dihapus dari GUI, dipakai sebagai recheck.
+    Format per baris: YYYY-MM-DD | TIPE | KEY - Nama (Serial)
+    """
+    log_path = Path("/sdcard/Documents/log_merge.txt")
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # Fallback ke home dir jika sdcard tidak tersedia
+        log_path = Path.home() / "Documents" / "log_merge.txt"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    urutan  = list(TIPE_LAYANAN_MAP.values()) + [FALLBACK_FOLDER]
+    sorted_keys = sorted(summary.keys(),
+                         key=lambda k: urutan.index(k) if k in urutan else 99)
+
+    lines = [
+        "",
+        "=" * 60,
+        f"  MERGE LOG  —  {now_str}",
+        "=" * 60,
+    ]
+    for tipe in sorted_keys:
+        entries = summary[tipe]
+        lines.append(f"\n  [{tipe}]  —  {len(entries)} pekerjaan")
+        lines.append("  " + "-" * 50)
+        for key, nama, serial, _ in entries:
+            lines.append(f"  {key}  -  {nama}  ({serial})")
+    if file_kosong:
+        lines.append(f"\n  [File Kosong]  —  {len(file_kosong)} file")
+        for f in file_kosong:
+            lines.append(f"    - {f.name}")
+    lines.append("")
+
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return log_path
+
+
     bulan = ["","Januari","Februari","Maret","April","Mei","Juni",
              "Juli","Agustus","September","Oktober","November","Desember"]
     return f"{bulan[dt.month]} {dt.year}"
@@ -385,11 +426,20 @@ def run_merge(source_dir: str, output_dir: str,
         save_note_txt(txt_path, entries)
         emit("txt_saved", {"path": str(txt_path)})
 
-    # 8. Ringkasan total
+    # 8. Ringkasan total (txt di folder output)
     ringkasan_path = None
     if summary:
         ringkasan_path = save_ringkasan_total(out_root, summary, file_kosong_list)
         emit("ringkasan", {"path": str(ringkasan_path)})
+
+    # 8b. Log merge persisten (append ke Documents/log_merge.txt)
+    merge_log_path = None
+    if summary:
+        try:
+            merge_log_path = save_merge_log(summary, file_kosong_list)
+            emit("merge_log_saved", {"path": str(merge_log_path)})
+        except Exception as e:
+            emit("merge_log_saved", {"path": "", "error": str(e)})
 
     # 9. Log
     log_path = out_root / LOG_FILE
@@ -399,15 +449,16 @@ def run_merge(source_dir: str, output_dir: str,
         lf.write("\n".join(log_lines))
 
     result = {
-        "success"        : success,
-        "failed"         : failed,
-        "file_kosong"    : len(file_kosong_list),
-        "only_stats"     : len(only_second),
-        "folder_bulan"   : folder_bulan,
-        "summary"        : dict(summary),   # folder_name -> [(key,nama,path)]
-        "ringkasan_path" : str(ringkasan_path) if ringkasan_path else "",
-        "log_path"       : str(log_path),
-        "output_dir"     : output_dir,
+        "success"         : success,
+        "failed"          : failed,
+        "file_kosong"     : len(file_kosong_list),
+        "only_stats"      : len(only_second),
+        "folder_bulan"    : folder_bulan,
+        "summary"         : dict(summary),
+        "ringkasan_path"  : str(ringkasan_path) if ringkasan_path else "",
+        "merge_log_path"  : str(merge_log_path) if merge_log_path else "",
+        "log_path"        : str(log_path),
+        "output_dir"      : output_dir,
     }
     emit("done", result)
     return result
@@ -416,20 +467,30 @@ def do_send_emails(summary: dict, cfg: dict, cb=None) -> dict:
     """
     Kirim email untuk semua Tipe Layanan.
     Kembalikan {"ok": n, "fail": n, "detail": [(tipe, bool, msg)]}
+    Events: email_start, email_result, email_done
     """
     def emit(ev, data):
         if cb: cb(ev, data)
 
+    total_tipe = len(summary)
+    emit("email_start", {"total": total_tipe})
+
     ok = fail = 0
     detail = []
-    for tipe, entries in sorted(summary.items()):
+    for idx, (tipe, entries) in enumerate(sorted(summary.items()), 1):
         pdf_files  = [e[3] for e in entries]
+        # Format: Nomor ST - Nama Pelanggan (Nomor Seri Perangkat)
         daftar_str = "\n".join(
-            f"  {k} - {n}  |  SN: {s}" for k, n, s, _ in entries
+            f"  {k} - {n} ({s})" for k, n, s, _ in entries
         )
+        emit("email_sending", {"tipe": tipe, "idx": idx, "total": total_tipe,
+                               "jumlah_file": len(pdf_files)})
         success, msg = send_email_subfolder(tipe, pdf_files, daftar_str, cfg)
         detail.append((tipe, success, msg))
-        emit("email_result", {"tipe": tipe, "ok": success, "msg": msg})
+        emit("email_result", {"tipe": tipe, "ok": success, "msg": msg,
+                              "idx": idx, "total": total_tipe})
         if success: ok += 1
         else:       fail += 1
+
+    emit("email_done", {"ok": ok, "fail": fail})
     return {"ok": ok, "fail": fail, "detail": detail}

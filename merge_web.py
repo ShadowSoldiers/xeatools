@@ -210,7 +210,7 @@ input:checked+.slider:before{transform:translateX(20px)}
   <div class="tab" onclick="showTab('merge')">▶ Merge</div>
   <div class="tab" onclick="showTab('schedule')">⏰ Schedule</div>
   <div class="tab" onclick="showTab('config')">⚙ Konfigurasi</div>
-  <div class="tab" onclick="showTab('ringkasan')">📊 Ringkasan</div>
+  <div class="tab" onclick="showTab('logmerge')">📋 Log</div>
 </div>
 
 <!-- ══════════ TAB: DOWNLOAD ══════════ -->
@@ -443,18 +443,44 @@ input:checked+.slider:before{transform:translateX(20px)}
   </div>
 </div>
 
-<!-- ══════════ TAB: RINGKASAN ══════════ -->
-<div id="tab-ringkasan" class="section">
+<!-- ══════════ TAB: LOG MERGE ══════════ -->
+<div id="tab-logmerge" class="section">
+
   <div class="card">
-    <div class="card-header">📊 Ringkasan Total Terakhir</div>
+    <div class="card-header">📋 Log Merge per Tipe Layanan</div>
     <div class="card-body">
-      <pre id="ringkasan-content"
-           style="font-size:.8rem;font-family:monospace;white-space:pre-wrap;
-                  color:var(--dark);line-height:1.6">
-Belum ada data. Jalankan merge terlebih dahulu.</pre>
-      <div class="btn-row mt12">
-        <button class="btn btn-outline" onclick="loadRingkasan()">🔄 Refresh</button>
+      <div id="logmerge-meta" style="font-size:.8rem;color:var(--gray);margin-bottom:10px">
+        Memuat...
       </div>
+
+      <!-- Filter per tipe -->
+      <div id="logmerge-filter" class="day-grid" style="margin-bottom:12px"></div>
+
+      <!-- Isi log -->
+      <pre id="logmerge-content"
+           style="font-size:.78rem;font-family:monospace;white-space:pre-wrap;
+                  color:var(--dark);line-height:1.65;background:var(--lgray);
+                  padding:12px;border-radius:8px;max-height:460px;overflow-y:auto">
+Belum ada log. Jalankan merge terlebih dahulu.</pre>
+
+      <div class="btn-row mt12">
+        <button class="btn btn-outline" onclick="loadLogMerge()">🔄 Refresh</button>
+        <button class="btn btn-outline" onclick="searchLogMerge()"
+          style="font-size:.8rem">🔍 Cari Nomor</button>
+      </div>
+      <div id="logmerge-search" class="hidden mt8">
+        <input type="text" id="logmerge-keyword" placeholder="Ketik nomor order / nama pelanggan..."
+          oninput="filterLogContent()">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">ℹ Tentang Log Ini</div>
+    <div class="card-body" style="font-size:.82rem;color:var(--gray);line-height:1.7">
+      Log disimpan di <code style="font-family:monospace">/sdcard/Documents/log_merge.txt</code><br>
+      Bersifat <b>append</b> — setiap merge menambah entri baru di bawah.<br>
+      Gunakan log ini untuk <b>recheck</b> apakah nomor order sudah pernah diproses sebelumnya.
     </div>
   </div>
 </div>
@@ -472,11 +498,11 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   event.target.classList.add('active');
-  if (name === 'config')    loadConfig();
-  if (name === 'ringkasan') loadRingkasan();
-  if (name === 'schedule')  loadSchedule();
-  if (name === 'download')  loadDlInfo();
-  if (name === 'merge')     loadCfgInfo();
+  if (name === 'config')   loadConfig();
+  if (name === 'logmerge') loadLogMerge();
+  if (name === 'schedule') loadSchedule();
+  if (name === 'download') loadDlInfo();
+  if (name === 'merge')    loadCfgInfo();
 }
 
 // ── Versi ──────────────────────────────────────────────────
@@ -687,7 +713,10 @@ function startMerge() {
     else if (t==='file_kosong') appendLog(`⚠  ${d.name} → File Kosong/`, 'log-warn');
     else if (t==='arsip')       appendLog(`📦 ${d.jumlah} file diarsip ke [${d.folder}]`, 'log-info');
     else if (t==='txt_saved')   appendLog(`📝 ${d.path.split('/').pop()} disimpan`, 'log-dim');
-    else if (t==='ringkasan')   appendLog(`📊 ringkasan_total.txt disimpan`, 'log-info');
+    else if (t==='ringkasan')     appendLog(`📊 ringkasan_total.txt disimpan`, 'log-dim');
+    else if (t==='merge_log_saved') {
+      if (d.path) appendLog(`📋 log_merge.txt diperbarui → ${d.path}`, 'log-info');
+    }
     else if (t==='done') {
       document.getElementById('progress-bar').style.width = '100%';
       appendLog(''); appendLog('══ Selesai ══', 'log-info');
@@ -758,16 +787,58 @@ function showResult(r) {
 
 function sendEmails() {
   document.getElementById('email-btn-row').classList.add('hidden');
-  document.getElementById('email-status').innerHTML =
-    '<div class="alert alert-info"><span class="spinner"></span> Mengirim email...</div>';
-  fetch('/api/send-email', {method:'POST'}).then(r=>r.json()).then(r=>{
-    document.getElementById('email-status').innerHTML =
-      r.ok > 0
-        ? `<div class="alert alert-success">✓ ${r.ok} email terkirim.</div>` +
-          r.detail.map(([t,ok,msg])=>
-            `<div class="file-item">${ok?'✓':'✗'} [${t}] ${msg}</div>`).join('')
-        : `<div class="alert alert-error">✗ Gagal.<br>${r.detail.map(([t,ok,msg])=>msg).join('<br>')}</div>`;
-  });
+  const statusEl = document.getElementById('email-status');
+  statusEl.innerHTML =
+    `<div class="alert alert-info"><span class="spinner"></span> Menyiapkan email...</div>
+     <div class="progress-wrap" style="margin-top:8px">
+       <div id="email-progress" class="progress-bar" style="width:0%"></div>
+     </div>
+     <div id="email-log" style="margin-top:8px;font-size:.82rem"></div>`;
+
+  const es = new EventSource('/api/send-email-stream');
+  es.onmessage = function(e) {
+    const ev = JSON.parse(e.data);
+    const t = ev.type; const d = ev.data;
+    const logEl = document.getElementById('email-log');
+    const progEl = document.getElementById('email-progress');
+
+    if (t === 'email_start') {
+      statusEl.querySelector('.alert').innerHTML =
+        `<span class="spinner"></span> Mengirim ${d.total} email...`;
+    }
+    else if (t === 'email_sending') {
+      if (logEl) logEl.innerHTML +=
+        `<div style="color:var(--teal)">⟳ [${d.tipe}] Mengirim ${d.jumlah_file} file...</div>`;
+      if (progEl) progEl.style.width = Math.round((d.idx-1)/d.total*100) + '%';
+    }
+    else if (t === 'email_result') {
+      if (logEl) logEl.innerHTML +=
+        d.ok
+          ? `<div style="color:var(--green)">✓ [${d.tipe}] ${d.msg}</div>`
+          : `<div style="color:var(--red)">✗ [${d.tipe}] ${d.msg}</div>`;
+      if (progEl) progEl.style.width = Math.round(d.idx/d.total*100) + '%';
+    }
+    else if (t === 'email_done') {
+      if (progEl) progEl.style.width = '100%';
+      const alertClass = d.ok > 0 ? 'alert-success' : 'alert-error';
+      statusEl.querySelector('.alert').className = `alert ${alertClass}`;
+      statusEl.querySelector('.alert').innerHTML =
+        d.ok > 0
+          ? `✓ ${d.ok} email berhasil dikirim.${d.fail > 0 ? ` (${d.fail} gagal)` : ''}`
+          : `✗ Semua email gagal dikirim.`;
+      es.close();
+    }
+    else if (t === 'error') {
+      statusEl.querySelector('.alert').className = 'alert alert-error';
+      statusEl.querySelector('.alert').innerHTML = `✗ Error: ${d.msg}`;
+      es.close();
+    }
+  };
+  es.onerror = function() {
+    es.close();
+    const el = document.getElementById('email-status');
+    if (el) el.innerHTML = '<div class="alert alert-error">✗ Koneksi terputus saat kirim email.</div>';
+  };
 }
 
 function cancelEmail() {
@@ -914,12 +985,83 @@ function applyUpdate() {
   });
 }
 
-// ── Ringkasan ──────────────────────────────────────────────
-function loadRingkasan() {
-  fetch('/api/ringkasan').then(r=>r.json()).then(r=>{
-    document.getElementById('ringkasan-content').textContent =
-      r.content || 'Belum ada data. Jalankan merge terlebih dahulu.';
+// ── Log Merge ──────────────────────────────────────────────
+let _fullLogContent = '';
+const TIPE_ORDER = ['Install','Maintenance','Repair - Service','Take Report','Lainnya','File Kosong'];
+
+function loadLogMerge() {
+  document.getElementById('logmerge-meta').textContent = 'Memuat...';
+  fetch('/api/log-merge').then(r=>r.json()).then(r=>{
+    _fullLogContent = r.content || '';
+    if (!_fullLogContent) {
+      document.getElementById('logmerge-meta').textContent =
+        'Belum ada log. Jalankan merge terlebih dahulu.';
+      document.getElementById('logmerge-content').textContent = '';
+      document.getElementById('logmerge-filter').innerHTML = '';
+      return;
+    }
+    // Hitung entri per tipe
+    const counts = {};
+    TIPE_ORDER.forEach(t => {
+      const matches = (_fullLogContent.match(new RegExp(`\\[${t}\\]`, 'g')) || []).length;
+      if (matches > 0) counts[t] = matches;
+    });
+    // Render filter buttons
+    const filterEl = document.getElementById('logmerge-filter');
+    filterEl.innerHTML = `<div class="day-btn active" data-tipe="semua" onclick="filterLogTipe(this)">Semua</div>`;
+    Object.entries(counts).forEach(([tipe, n]) => {
+      filterEl.innerHTML +=
+        `<div class="day-btn" data-tipe="${tipe}" onclick="filterLogTipe(this)">${tipe} (${n})</div>`;
+    });
+    // Hitung total sesi merge
+    const sesi = (_fullLogContent.match(/MERGE LOG/g) || []).length;
+    document.getElementById('logmerge-meta').innerHTML =
+      `<b>${sesi}</b> sesi merge tersimpan &nbsp;·&nbsp; ` +
+      Object.entries(counts).map(([t,n])=>
+        `<span class="badge badge-teal">${t}: ${n}</span>`).join(' ');
+    document.getElementById('logmerge-content').textContent = _fullLogContent;
+  }).catch(()=>{
+    document.getElementById('logmerge-meta').textContent = 'Tidak bisa memuat log.';
   });
+}
+
+function filterLogTipe(el) {
+  document.querySelectorAll('#logmerge-filter .day-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  const tipe = el.dataset.tipe;
+  if (tipe === 'semua') {
+    document.getElementById('logmerge-content').textContent = _fullLogContent;
+    return;
+  }
+  // Filter: tampilkan hanya blok yang mengandung tipe terpilih
+  const lines = _fullLogContent.split('\n');
+  const out = []; let inBlock = false; let inTipe = false;
+  lines.forEach(line => {
+    if (line.includes('MERGE LOG')) { inBlock = true; inTipe = false; out.push(line); return; }
+    if (line.match(/^\s*\[.+\]\s*—/)) {
+      inTipe = line.includes(`[${tipe}]`);
+      if (inTipe) out.push(line);
+      return;
+    }
+    if (inTipe) out.push(line);
+    else if (inBlock && !line.trim()) out.push(''); // jaga separator
+  });
+  document.getElementById('logmerge-content').textContent = out.join('\n');
+}
+
+function searchLogMerge() {
+  document.getElementById('logmerge-search').classList.toggle('hidden');
+  document.getElementById('logmerge-keyword').focus();
+}
+
+function filterLogContent() {
+  const kw = document.getElementById('logmerge-keyword').value.toLowerCase();
+  if (!kw) { document.getElementById('logmerge-content').textContent = _fullLogContent; return; }
+  const lines = _fullLogContent.split('\n');
+  const out = lines.filter(l =>
+    l.toLowerCase().includes(kw) || l.includes('MERGE LOG') || l.includes('===')
+  );
+  document.getElementById('logmerge-content').textContent = out.join('\n');
 }
 
 // ── Init ───────────────────────────────────────────────────
@@ -1047,17 +1189,42 @@ def api_run():
                     mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-# ── Send Email ───────────────────────────────────────────────
-@app.route("/api/send-email", methods=["POST"])
-def api_send_email():
+# ── Send Email SSE ───────────────────────────────────────────
+@app.route("/api/send-email-stream")
+def api_send_email_stream():
     result = _state.get("result")
     if not result or not result.get("summary"):
-        return jsonify({"ok": 0, "fail": 0, "detail": [], "error": "Tidak ada hasil merge"})
-    cfg          = core.load_config()
-    email_result = core.do_send_emails(result["summary"], cfg)
-    return jsonify({"ok"    : email_result["ok"],
-                    "fail"  : email_result["fail"],
-                    "detail": [(t, ok, msg) for t, ok, msg in email_result["detail"]]})
+        def gen_err():
+            yield f"data: {json.dumps({'type':'error','data':{'msg':'Tidak ada hasil merge'}})}\n\n"
+        return Response(stream_with_context(gen_err()),
+                        mimetype="text/event-stream",
+                        headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
+
+    cfg = core.load_config()
+    q   = queue.Queue()
+
+    def cb(event, data):
+        q.put({"type": event, "data": data})
+
+    def worker():
+        try:
+            core.do_send_emails(result["summary"], cfg, cb)
+        except Exception as e:
+            q.put({"type": "error", "data": {"msg": str(e)}})
+        finally:
+            q.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def generate():
+        while True:
+            item = q.get()
+            if item is None: break
+            yield f"data: {json.dumps(item)}\n\n"
+
+    return Response(stream_with_context(generate()),
+                    mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 # ── Schedule ─────────────────────────────────────────────────
 @app.route("/api/schedule", methods=["POST"])
@@ -1131,15 +1298,19 @@ def api_apply_update():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
-# ── Ringkasan ────────────────────────────────────────────────
-@app.route("/api/ringkasan")
-def api_ringkasan():
-    cfg      = core.load_config()
-    txt_path = Path(cfg["output_dir"]) / "ringkasan_total.txt"
-    if txt_path.exists():
-        with open(txt_path, "r", encoding="utf-8") as f:
-            return jsonify({"content": f.read()})
-    return jsonify({"content": ""})
+# ── Log Merge ────────────────────────────────────────────────
+@app.route("/api/log-merge")
+def api_log_merge():
+    """Baca log merge persisten dari /sdcard/Documents/log_merge.txt."""
+    candidates = [
+        Path("/sdcard/Documents/log_merge.txt"),
+        Path.home() / "Documents" / "log_merge.txt",
+    ]
+    for p in candidates:
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return jsonify({"content": f.read(), "path": str(p)})
+    return jsonify({"content": "", "path": ""})
 
 @app.route("/api/download/files")
 def api_download_files():
