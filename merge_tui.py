@@ -148,7 +148,10 @@ def menu_run():
 
     def cb(event, data):
         with event_lock:
-            if event == "scan":
+            if event == "cleanup":
+                if data["jumlah"] > 0:
+                    console.print(f"  [yellow]🗑 {data['jumlah']} file duplikat dihapus[/yellow]")
+            elif event == "scan":
                 console.print(f"  [cyan]🔍 Scan[/cyan]  {data['total']} file PDF ditemukan di {data['source_dir']}")
             elif event == "classify":
                 console.print(f"  [cyan]📂 Klasifikasi[/cyan]  "

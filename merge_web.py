@@ -696,6 +696,10 @@ function startMerge() {
     const ev = JSON.parse(e.data);
     const t = ev.type; const d = ev.data;
     if (t==='scan')       appendLog(`🔍 Scan: ${d.total} file PDF ditemukan`, 'log-info');
+    else if (t==='cleanup') {
+      if (d.jumlah > 0)
+        appendLog(`🗑 ${d.jumlah} file duplikat dihapus: ${d.deleted.join(', ')}`, 'log-warn');
+    }
     else if (t==='classify')   appendLog(`📂 STBA:${d.stba}  STATS:${d.stats}  Unknown:${d.unknown}`, 'log-info');
     else if (t==='pair_found') {
       totalPairs = d.pairs;

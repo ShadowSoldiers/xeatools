@@ -325,6 +325,31 @@ def send_email_subfolder(tipe: str, pdf_files: list,
 # FUNGSI UTAMA — run_merge()
 # ─────────────────────────────────────────────────────────────
 
+def cleanup_duplicate_files(output_dir: str) -> list:
+    """
+    Hapus file PDF duplikat hasil merge ganda.
+    Target: file dengan pola nama_angka.pdf (misal ABC123_1.pdf, ABC123_2.pdf).
+    File tanpa suffix angka dibiarkan.
+    Kembalikan list nama file yang dihapus.
+    """
+    out_root = Path(output_dir)
+    if not out_root.exists():
+        return []
+    deleted = []
+    # Scan semua subfolder (Install, Maintenance, dll) + root output
+    dirs_to_scan = [out_root] + [d for d in out_root.iterdir() if d.is_dir()]
+    for folder in dirs_to_scan:
+        for pdf in folder.glob("*.pdf"):
+            # Cocokkan pola: diakhiri _angka sebelum .pdf
+            if re.search(r"_\d+$", pdf.stem):
+                try:
+                    pdf.unlink()
+                    deleted.append(pdf.name)
+                except Exception:
+                    pass
+    return deleted
+
+
 def run_merge(source_dir: str, output_dir: str,
               digit_count: int = 6, cb=None) -> dict:
     """
@@ -339,6 +364,11 @@ def run_merge(source_dir: str, output_dir: str,
     out_root    = Path(output_dir)
     source_path = Path(source_dir)
     out_root.mkdir(parents=True, exist_ok=True)
+
+    # 0. Bersihkan file duplikat (_1, _2, dst) sebelum merge
+    deleted = cleanup_duplicate_files(output_dir)
+    if deleted:
+        emit("cleanup", {"deleted": deleted, "jumlah": len(deleted)})
 
     # 1. Scan
     all_pdfs = find_pdfs(source_dir)
