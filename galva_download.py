@@ -13,11 +13,11 @@ from datetime import datetime
 BASE_URL = "https://api.galva.co.id"
 
 TRIGGER_MAP = {
-    "INST": ["CL"],
-    "MAIN": ["CL"],
-    "TKRP": ["CL"],
-    "SERV": ["FN", "CL"],
-    "PLOT": ["CL"],
+    "INST": ["CL"],       # Install
+    "MAIN": ["CL"],       # Maintenance
+    "TKRP": ["CL"],       # Take Report
+    "SERV": ["FN", "CL"], # Repair / Service
+    # PLOT (Pull Out) tidak diunduh — tidak ada hitungan nilai
 }
 
 TARGET_DOCS = ["STAT", "STBA"]
