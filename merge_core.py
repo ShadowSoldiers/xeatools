@@ -254,9 +254,36 @@ def save_merge_log(summary: dict, file_kosong: list) -> Path:
     return log_path
 
 
-    bulan = ["","Januari","Februari","Maret","April","Mei","Juni",
-             "Juli","Agustus","September","Oktober","November","Desember"]
-    return f"{bulan[dt.month]} {dt.year}"
+def load_processed_keys() -> set:
+    """
+    Baca log_merge.txt, ekstrak semua key order yang sudah pernah dimerge.
+    Dipakai untuk skip duplikat saat merge berikutnya.
+    """
+    candidates = [
+        Path("/sdcard/Documents/log_merge.txt"),
+        Path.home() / "Documents" / "log_merge.txt",
+    ]
+    keys = set()
+    for log_path in candidates:
+        if not log_path.exists():
+            continue
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    # Format baris: "  KEY  -  Nama  (Serial)"
+                    # Key adalah bagian pertama sebelum " - "
+                    if line and not line.startswith(("[", "=", "-", "/")):
+                        parts = line.split("  -  ", 1)
+                        if parts:
+                            key = parts[0].strip()
+                            if key:
+                                keys.add(key.upper())
+        except Exception:
+            pass
+        break  # pakai file pertama yang ditemukan
+    return keys
+
 
 def nama_bulan_indonesia(dt: datetime) -> str:
     bulan = ["","Januari","Februari","Maret","April","Mei","Juni",
@@ -370,6 +397,11 @@ def run_merge(source_dir: str, output_dir: str,
     if deleted:
         emit("cleanup", {"deleted": deleted, "jumlah": len(deleted)})
 
+    # 0b. Muat key yang sudah pernah dimerge dari log_merge.txt
+    processed_keys = load_processed_keys()
+    if processed_keys:
+        emit("log_check", {"total_processed": len(processed_keys)})
+
     # 1. Scan
     all_pdfs = find_pdfs(source_dir)
     emit("scan", {"total": len(all_pdfs), "source_dir": source_dir})
@@ -408,6 +440,15 @@ def run_merge(source_dir: str, output_dir: str,
     for key in pairs_ok:
         first_file  = sorted(pool["FIRST"][key])[0]
         second_file = sorted(pool["SECOND"][key])[0]
+
+        # Cek apakah key ini sudah pernah dimerge sebelumnya
+        if key.upper() in processed_keys:
+            log_lines.append(f"[SKIP] {key} — sudah pernah dimerge (ada di log)")
+            emit("merge_skip", {"key": key, "reason": "sudah ada di log_merge.txt"})
+            # Pindahkan file mentah ke arsip meski di-skip, agar tidak menumpuk
+            moved_pairs.append((first_file, second_file))
+            continue
+
         nama, tipe, folder_name, serial = extract_stba_info(first_file)
 
         tipe_folder = out_root / folder_name

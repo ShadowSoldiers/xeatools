@@ -141,8 +141,20 @@ def save_document(support_number: str, doc: dict, save_dir: str) -> str:
         return "fail"
     filename = f"{support_number}_{doc_code}.{ext}".replace("/", "-")
     filepath = os.path.join(save_dir, filename)
+
+    # Cek di folder sumber
     if os.path.exists(filepath):
         return "skip"
+
+    # Cek di subfolder arsip bulan (misal: April 2026/, Maret 2026/)
+    # File dipindah ke sana setelah merge — jangan unduh ulang
+    try:
+        for sub in Path(save_dir).iterdir():
+            if sub.is_dir() and (sub / filename).exists():
+                return "skip"
+    except Exception:
+        pass
+
     try:
         with open(filepath, "wb") as f:
             f.write(decode_base64(raw))

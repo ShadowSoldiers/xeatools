@@ -700,6 +700,12 @@ function startMerge() {
       if (d.jumlah > 0)
         appendLog(`🗑 ${d.jumlah} file duplikat dihapus: ${d.deleted.join(', ')}`, 'log-warn');
     }
+    else if (t==='log_check') {
+      appendLog(`📋 log_merge.txt: ${d.total_processed} key sudah pernah diproses`, 'log-dim');
+    }
+    else if (t==='merge_skip') {
+      appendLog(`⏭  [${d.key}] dilewati — ${d.reason}`, 'log-warn');
+    }
     else if (t==='classify')   appendLog(`📂 STBA:${d.stba}  STATS:${d.stats}  Unknown:${d.unknown}`, 'log-info');
     else if (t==='pair_found') {
       totalPairs = d.pairs;
