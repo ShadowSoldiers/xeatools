@@ -200,7 +200,7 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div class="header">
   <div>
     <h1>XEA Tools</h1>
-    <span>DitoLabs</span>
+    <span>PT Galva Technologies Tbk</span>
   </div>
   <span class="version-tag" id="ver-tag" style="margin-left:auto">v–</span>
 </div>
@@ -1352,4 +1352,4 @@ if __name__ == "__main__":
     print("  Buka di Chrome Android:")
     print("  ➜  http://localhost:5000")
     print("=" * 54)
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)

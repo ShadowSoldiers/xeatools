@@ -10,6 +10,7 @@ import shutil
 import smtplib
 import json
 import os
+import base64
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
@@ -27,6 +28,7 @@ except ImportError:
 # FILE KONFIGURASI (disimpan di HP agar persisten)
 # ─────────────────────────────────────────────────────────────
 CONFIG_FILE = str(Path.home() / "merge_pdf_config.json")
+KEY_FILE    = str(Path.home() / ".xea_key")
 
 DEFAULT_CONFIG = {
     "source_dir"      : "/sdcard/Documents",
@@ -41,30 +43,98 @@ DEFAULT_CONFIG = {
     "bcc"             : [],
     "subject_template": "Laporan PDF - {tipe_layanan}",
     "body_template"   : (
-        "Dear All,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
+        "Halo,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
         "{daftar_pelanggan}\n\nTerlampir {jumlah_file} file PDF.\n\n"
-        "Email ini dikirim otomatis oleh Depo."
+        "Email ini dikirim otomatis oleh script merge_pdf."
     ),
     "schedule_enabled": False,
     "schedule_time"   : "08:00",
     "schedule_days"   : [1, 2, 3, 4, 5],
 }
 
+# ─────────────────────────────────────────────────────────────
+# ENKRIPSI CONFIG
+# ─────────────────────────────────────────────────────────────
+
+def _get_or_create_key() -> bytes:
+    """Ambil atau buat kunci enkripsi Fernet. Disimpan di ~/.xea_key (chmod 600)."""
+    key_path = Path(KEY_FILE)
+    if key_path.exists():
+        return key_path.read_bytes().strip()
+    # Buat kunci baru
+    try:
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key()
+    except ImportError:
+        # Fallback: kunci berbasis UUID device (tidak butuh library)
+        import hashlib, platform
+        seed = platform.node() + str(Path.home())
+        raw  = hashlib.sha256(seed.encode()).digest()
+        key  = base64.urlsafe_b64encode(raw)
+    key_path.write_bytes(key + b"\n")
+    try:
+        os.chmod(KEY_FILE, 0o600)
+    except Exception:
+        pass
+    return key
+
+
+def _encrypt(data: str, key: bytes) -> bytes:
+    """Enkripsi string JSON. Pakai Fernet jika tersedia, XOR-base64 sebagai fallback."""
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key).encrypt(data.encode("utf-8"))
+    except ImportError:
+        # Fallback XOR sederhana — lebih baik dari plain text
+        raw = data.encode("utf-8")
+        k   = key[:32]
+        xor = bytes(b ^ k[i % len(k)] for i, b in enumerate(raw))
+        return b"XOR:" + base64.b64encode(xor)
+
+
+def _decrypt(data: bytes, key: bytes) -> str:
+    """Dekripsi. Auto-detect Fernet vs XOR fallback."""
+    if data.startswith(b"XOR:"):
+        raw = base64.b64decode(data[4:])
+        k   = key[:32]
+        return bytes(b ^ k[i % len(k)] for i, b in enumerate(raw)).decode("utf-8")
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key).decrypt(data).decode("utf-8")
+    except Exception as e:
+        raise Exception(f"Dekripsi gagal: {e}")
+
+
 def load_config() -> dict:
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-            cfg = DEFAULT_CONFIG.copy()
+    cfg = DEFAULT_CONFIG.copy()
+    if not os.path.exists(CONFIG_FILE):
+        return cfg
+    try:
+        raw = Path(CONFIG_FILE).read_bytes()
+        # Coba dekripsi dulu
+        if raw.strip().startswith(b"{"):
+            # Plain JSON lama → load dan enkripsi ulang otomatis
+            saved = json.loads(raw.decode("utf-8"))
             cfg.update(saved)
-            return cfg
-        except Exception:
-            pass
-    return DEFAULT_CONFIG.copy()
+            save_config(cfg)  # enkripsi sekarang
+        else:
+            key   = _get_or_create_key()
+            saved = json.loads(_decrypt(raw, key))
+            cfg.update(saved)
+    except Exception:
+        pass
+    return cfg
+
 
 def save_config(cfg: dict):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    key      = _get_or_create_key()
+    payload  = json.dumps(cfg, indent=2, ensure_ascii=False)
+    encrypted = _encrypt(payload, key)
+    Path(CONFIG_FILE).write_bytes(encrypted)
+    try:
+        os.chmod(CONFIG_FILE, 0o600)
+    except Exception:
+        pass
 
 # ─────────────────────────────────────────────────────────────
 # KONSTANTA

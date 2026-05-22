@@ -99,7 +99,7 @@ echo ""
 
 # ── Step 5: Install Python libraries ────────────────────────
 echo -e "${CYAN}[5/6] Install Python libraries...${NC}"
-pip install flask requests pypdf apscheduler --break-system-packages -q
+pip install flask requests pypdf apscheduler cryptography --break-system-packages -q
 if [ $? -ne 0 ]; then
   echo -e "${YELLOW}⚠  Beberapa library mungkin gagal. Coba manual:${NC}"
   echo "    pip install flask requests pypdf apscheduler --break-system-packages"
