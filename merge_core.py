@@ -294,17 +294,22 @@ def pindah_file_mentah(source_dir: str, moved_pairs: list) -> tuple:
     folder_bulan = nama_bulan_indonesia(datetime.now())
     target_dir   = Path(source_dir) / folder_bulan
     target_dir.mkdir(parents=True, exist_ok=True)
-    ok = gagal = 0
+    ok = gagal = skip = 0
     for stba_path, stats_path in moved_pairs:
         for src in [stba_path, stats_path]:
             dst = target_dir / src.name
-            c = 1
-            while dst.exists():
-                dst = target_dir / f"{src.stem}_{c}{src.suffix}"; c += 1
-            try:
-                shutil.move(str(src), str(dst)); ok += 1
-            except Exception:
-                gagal += 1
+            if dst.exists():
+                # File sudah ada di arsip — hapus sumber saja, tidak buat duplikat
+                try:
+                    src.unlink()
+                    skip += 1
+                except Exception:
+                    gagal += 1
+            else:
+                try:
+                    shutil.move(str(src), str(dst)); ok += 1
+                except Exception:
+                    gagal += 1
     return folder_bulan, ok, gagal
 
 # ─────────────────────────────────────────────────────────────
@@ -455,9 +460,13 @@ def run_merge(source_dir: str, output_dir: str,
         tipe_folder.mkdir(parents=True, exist_ok=True)
 
         output_file = tipe_folder / f"{key}.pdf"
-        c = 1
-        while output_file.exists():
-            output_file = tipe_folder / f"{key}_{c}.pdf"; c += 1
+
+        # Jika file sudah ada di output → skip, arsip file mentah, jangan buat duplikat
+        if output_file.exists():
+            log_lines.append(f"[SKIP] {key} — output sudah ada di {folder_name}/")
+            emit("merge_skip", {"key": key, "reason": f"output sudah ada di {folder_name}/"})
+            moved_pairs.append((first_file, second_file))
+            continue
 
         ok = merge_two(first_file, second_file, output_file)
         if ok:

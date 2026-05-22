@@ -250,18 +250,28 @@ def save_document(support_number: str, doc: dict, save_dir: str) -> str:
     if not raw:
         return "fail"
 
-    # Nama file selalu .pdf (meski sumber JPG)
-    filename = f"{support_number}_{doc_code}.pdf".replace("/", "-")
-    filepath = os.path.join(save_dir, filename)
+    # Nama file selalu .pdf
+    filename  = f"{support_number}_{doc_code}.pdf".replace("/", "-")
+    filepath  = os.path.join(save_dir, filename)
+    stem_base = Path(filename).stem  # misal: SVODR-2604-T09760_STAT
 
     # Cek di folder sumber
     if os.path.exists(filepath):
         return "skip"
-    # Cek di subfolder arsip bulan
+
+    # Cek di subfolder arsip bulan — cocokkan stem prefix
+    # agar SVODR-2604-T09760_STAT_6.pdf juga terdeteksi sebagai duplikat
     try:
         for sub in Path(save_dir).iterdir():
-            if sub.is_dir() and (sub / filename).exists():
+            if not sub.is_dir():
+                continue
+            # Cek nama persis dulu
+            if (sub / filename).exists():
                 return "skip"
+            # Cek varian dengan suffix angka (misal _1, _2, _7)
+            for existing in sub.glob(f"{stem_base}*.pdf"):
+                if existing.is_file():
+                    return "skip"
     except Exception:
         pass
 
@@ -271,39 +281,10 @@ def save_document(support_number: str, doc: dict, save_dir: str) -> str:
         return "fail"
 
     try:
-        # Konversi otomatis jika file adalah JPG
         if is_jpg_bytes(raw_bytes):
             raw_bytes = _minimal_jpg_pdf(raw_bytes)
         with open(filepath, "wb") as f:
             f.write(raw_bytes)
-        return "ok"
-    except Exception:
-        return "fail"
-    """Simpan dokumen. Return 'ok'|'skip'|'fail'."""
-    ext      = doc.get("document_extension") or "pdf"
-    doc_code = doc.get("document_type_code", "DOC")
-    raw      = doc.get("document")
-    if not raw:
-        return "fail"
-    filename = f"{support_number}_{doc_code}.{ext}".replace("/", "-")
-    filepath = os.path.join(save_dir, filename)
-
-    # Cek di folder sumber
-    if os.path.exists(filepath):
-        return "skip"
-
-    # Cek di subfolder arsip bulan (misal: April 2026/, Maret 2026/)
-    # File dipindah ke sana setelah merge — jangan unduh ulang
-    try:
-        for sub in Path(save_dir).iterdir():
-            if sub.is_dir() and (sub / filename).exists():
-                return "skip"
-    except Exception:
-        pass
-
-    try:
-        with open(filepath, "wb") as f:
-            f.write(decode_base64(raw))
         return "ok"
     except Exception:
         return "fail"
