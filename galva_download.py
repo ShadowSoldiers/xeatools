@@ -8,6 +8,7 @@ import requests
 import base64
 import json
 import os
+from pathlib import Path
 from datetime import datetime
 
 BASE_URL = "https://api.galva.co.id"
