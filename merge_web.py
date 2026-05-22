@@ -200,7 +200,7 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div class="header">
   <div>
     <h1>XEA Tools</h1>
-    <span>PT Galva Technologies Tbk</span>
+    <span>DitoLabs</span>
   </div>
   <span class="version-tag" id="ver-tag" style="margin-left:auto">v–</span>
 </div>
