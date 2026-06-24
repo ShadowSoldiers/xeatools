@@ -42,17 +42,23 @@ _state = {"result": None, "dl_result": None}
 # ── Versi aplikasi (dari git) ────────────────────────────────
 def get_version():
     try:
+        work = str(Path(__file__).parent)
         v = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
-            cwd=Path(__file__).parent, stderr=subprocess.DEVNULL
+            cwd=work, stderr=subprocess.DEVNULL, timeout=5
         ).decode().strip()
         d = subprocess.check_output(
             ["git", "log", "-1", "--format=%cd", "--date=format:%d %b %Y %H:%M"],
-            cwd=Path(__file__).parent, stderr=subprocess.DEVNULL
+            cwd=work, stderr=subprocess.DEVNULL, timeout=5
         ).decode().strip()
         return v, d
     except Exception:
-        return "unknown", ""
+        # Fallback: baca versi dari file jika git tidak tersedia
+        ver_file = Path(__file__).parent / ".version"
+        if ver_file.exists():
+            v = ver_file.read_text().strip()
+            return v, ""
+        return "-", ""
 
 # ── Schedule job ─────────────────────────────────────────────
 def _run_scheduled_job():
@@ -200,7 +206,7 @@ input:checked+.slider:before{transform:translateX(20px)}
 <div class="header">
   <div>
     <h1>XEA Tools</h1>
-    <span>DitoLabs</span>
+    <span>PT Galva Technologies Tbk</span>
   </div>
   <span class="version-tag" id="ver-tag" style="margin-left:auto">v–</span>
 </div>
