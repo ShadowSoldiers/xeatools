@@ -269,7 +269,70 @@ def is_jpg_bytes(data: bytes) -> bool:
     return data[:2] == b'\xff\xd8'
 
 
-def save_document(support_number: str, doc: dict, save_dir: str) -> str:
+# ─────────────────────────────────────────────────────────────
+# LOG DOWNLOAD
+# ─────────────────────────────────────────────────────────────
+
+DOWNLOAD_LOG = "/sdcard/Documents/log_download.txt"
+
+
+def load_download_log() -> set:
+    """Baca log_download.txt, return set nama file yang sudah pernah diunduh."""
+    filenames = set()
+    try:
+        log_path = Path(DOWNLOAD_LOG)
+        if not log_path.exists():
+            return filenames
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split(" | ")
+                if len(parts) >= 2:
+                    filenames.add(parts[1].strip())
+    except Exception:
+        pass
+    return filenames
+
+
+def append_download_log(filename: str, status: str = "OK"):
+    """Tambah entri ke log_download.txt dengan timestamp."""
+    try:
+        log_path = Path(DOWNLOAD_LOG)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{timestamp} | {filename} | {status}\n")
+    except Exception:
+        pass
+
+
+def cleanup_archive_duplicates(source_dir: str) -> list:
+    """Hapus file duplikat (*_1.pdf, *_2.pdf dst) dari subfolder arsip bulan."""
+    deleted = []
+    try:
+        src = Path(source_dir)
+        if not src.exists():
+            return deleted
+        for sub in src.iterdir():
+            if not sub.is_dir():
+                continue
+            for pdf in sub.glob("*.pdf"):
+                if re.search(r"_\d+$", pdf.stem):
+                    try:
+                        pdf.unlink()
+                        deleted.append(f"{sub.name}/{pdf.name}")
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return deleted
+
+
+
+def save_document(support_number: str, doc: dict, save_dir: str,
+                  downloaded_log: set = None) -> str:
     """Simpan dokumen. JPG otomatis dikonversi ke PDF. Return 'ok'|'skip'|'fail'."""
     doc_code = doc.get("document_type_code", "DOC")
     raw      = doc.get("document")
