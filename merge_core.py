@@ -43,9 +43,9 @@ DEFAULT_CONFIG = {
     "bcc"             : [],
     "subject_template": "Laporan PDF - {tipe_layanan}",
     "body_template"   : (
-        "Dear All,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
+        "Halo,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
         "{daftar_pelanggan}\n\nTerlampir {jumlah_file} file PDF.\n\n"
-        "Email ini dikirim otomatis oleh Depo."
+        "Email ini dikirim otomatis oleh {nama_akun}."
     ),
     "schedule_enabled": False,
     "schedule_time"   : "08:00",
@@ -387,7 +387,8 @@ def pindah_file_mentah(source_dir: str, moved_pairs: list) -> tuple:
 # ─────────────────────────────────────────────────────────────
 
 def send_email_subfolder(tipe: str, pdf_files: list,
-                         daftar_pelanggan: str, cfg: dict) -> tuple:
+                         daftar_pelanggan: str, cfg: dict,
+                         nama_akun: str = "") -> tuple:
     """Kirim 1 email. Kembalikan (ok: bool, pesan: str)"""
     to_list  = cfg.get("to", [])
     cc_list  = cfg.get("cc", [])
@@ -397,7 +398,8 @@ def send_email_subfolder(tipe: str, pdf_files: list,
     body     = cfg.get("body_template", "").format(
                     tipe_layanan=tipe,
                     daftar_pelanggan=daftar_pelanggan,
-                    jumlah_file=len(pdf_files))
+                    jumlah_file=len(pdf_files),
+                    nama_akun=nama_akun or cfg.get("xea_username", "XEA Tools"))
     msg = MIMEMultipart()
     msg["From"]    = cfg["sender_email"]
     msg["To"]      = ", ".join(to_list)
@@ -635,17 +637,17 @@ def do_send_emails(summary: dict, cfg: dict, cb=None) -> dict:
     total_tipe = len(summary)
     emit("email_start", {"total": total_tipe})
 
+    nama_akun = cfg.get("xea_account_name", cfg.get("xea_username", "XEA Tools"))
     ok = fail = 0
     detail = []
     for idx, (tipe, entries) in enumerate(sorted(summary.items()), 1):
         pdf_files  = [e[3] for e in entries]
-        # Format: Nomor ST - Nama Pelanggan (Nomor Seri Perangkat)
         daftar_str = "\n".join(
             f"  {k} - {n} ({s})" for k, n, s, _ in entries
         )
         emit("email_sending", {"tipe": tipe, "idx": idx, "total": total_tipe,
                                "jumlah_file": len(pdf_files)})
-        success, msg = send_email_subfolder(tipe, pdf_files, daftar_str, cfg)
+        success, msg = send_email_subfolder(tipe, pdf_files, daftar_str, cfg, nama_akun)
         detail.append((tipe, success, msg))
         emit("email_result", {"tipe": tipe, "ok": success, "msg": msg,
                               "idx": idx, "total": total_tipe})

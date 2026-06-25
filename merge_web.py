@@ -106,15 +106,52 @@ HTML = r"""
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>XEA Tools</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root{
+  --bg:#f0f4f8;--surface:#ffffff;--card:#ffffff;
   --navy:#1a3c5e;--teal:#0891b2;--lteal:#e0f7ff;
   --green:#059669;--lgreen:#d1fae5;--orange:#ea580c;
   --red:#dc2626;--gray:#64748b;--lgray:#f0f4f8;
   --dark:#0f172a;--white:#ffffff;
+  --border:#e2e8f0;--text:#0f172a;--muted:#64748b;
+  --input-bg:#f0f4f8;
+  --transition: background .25s, color .25s, border-color .25s;
 }
-*{box-sizing:border-box;margin:0;padding:0}
+[data-theme="dark"]{
+  --bg:#0a0f1e;--surface:#111827;--card:#161f35;
+  --navy:#0f172a;--lgray:#1e293b;
+  --dark:#e2e8f0;--white:#1e293b;
+  --border:#1e3a5f;--text:#e2e8f0;--muted:#64748b;
+  --input-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0;transition:background .2s,color .2s,border-color .2s}
 body{font-family:'Segoe UI',sans-serif;background:var(--lgray);color:var(--dark);min-height:100vh}
+[data-theme="dark"]{
+  --navy:#0f172a;--lgray:#0f172a;--white:#1e293b;--dark:#e2e8f0;--gray:#94a3b8;
+  --border-color:#1e3a5f;
+}
+[data-theme="dark"] body{background:#0a0f1e;color:#e2e8f0}
+[data-theme="dark"] .card{background:#111827;border-color:#1e3a5f}
+[data-theme="dark"] .card-body{background:#111827;color:#e2e8f0}
+[data-theme="dark"] input[type=text],[data-theme="dark"] input[type=email],
+[data-theme="dark"] input[type=password],[data-theme="dark"] input[type=date],
+[data-theme="dark"] input[type=time],[data-theme="dark"] input[type=number]{
+  background:#1e293b;color:#e2e8f0;border-color:#1e3a5f}
+[data-theme="dark"] .file-list,[data-theme="dark"] .day-btn{background:#1e293b;border-color:#1e3a5f}
+[data-theme="dark"] #log-box,[data-theme="dark"] #dl-log-box{background:#020817}
+[data-theme="dark"] table td{border-color:#1e3a5f}
+[data-theme="dark"] tr:nth-child(even) td{background:#1e293b}
+[data-theme="dark"] .stat{background:#111827;border-color:#1e3a5f}
+[data-theme="dark"] .stat-num{color:#67e8f9}
+[data-theme="dark"] .alert-info{background:rgba(8,145,178,.15);color:#67e8f9}
+[data-theme="dark"] .alert-success{background:rgba(5,150,105,.15);color:#34d399}
+[data-theme="dark"] .alert-warn{background:rgba(234,88,12,.15);color:#fb923c}
+[data-theme="dark"] .alert-error{background:rgba(220,38,38,.15);color:#f87171}
+[data-theme="dark"] pre{background:#020817;color:#e2e8f0}
+.theme-btn{background:none;border:1px solid #334155;color:#94a3b8;
+  padding:5px 10px;border-radius:6px;font-size:.8rem;cursor:pointer;margin-left:auto}
+.theme-btn:hover{border-color:var(--teal);color:var(--teal)}
 .header{background:var(--navy);color:var(--white);padding:12px 16px;position:sticky;top:0;z-index:99;
   display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--teal)}
 .header h1{font-size:1.1rem;font-weight:700;color:var(--teal)}
@@ -209,11 +246,14 @@ input:checked+.slider:before{transform:translateX(20px)}
     <span>PT Galva Technologies Tbk</span>
   </div>
   <span class="version-tag" id="ver-tag" style="margin-left:auto">v–</span>
+  <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
 </div>
 
 <div class="tabs">
   <div class="tab active" onclick="showTab('download')">📥 Download</div>
+  <div class="tab" onclick="showTab('cari')">🔍 Cari</div>
   <div class="tab" onclick="showTab('merge')">▶ Merge</div>
+  <div class="tab" onclick="showTab('statistik')">📊 Statistik</div>
   <div class="tab" onclick="showTab('schedule')">⏰ Schedule</div>
   <div class="tab" onclick="showTab('config')">⚙ Konfigurasi</div>
   <div class="tab" onclick="showTab('logmerge')">📋 Log</div>
@@ -229,7 +269,7 @@ input:checked+.slider:before{transform:translateX(20px)}
   </div>
 
   <div class="card">
-    <div class="card-header">📅 Rentang Tanggal</div>
+    <div class="card-header">📅 Rentang Tanggal & Filter</div>
     <div class="card-body">
       <div class="row2">
         <div>
@@ -240,6 +280,13 @@ input:checked+.slider:before{transform:translateX(20px)}
           <label>Sampai Tanggal</label>
           <input type="date" id="dl-sampai">
         </div>
+      </div>
+      <label>Tipe Pekerjaan</label>
+      <div class="day-grid" style="margin-bottom:8px">
+        <div class="day-btn active" data-type="MAIN" onclick="toggleType(this)">Maintenance</div>
+        <div class="day-btn active" data-type="SERV" onclick="toggleType(this)">Service</div>
+        <div class="day-btn active" data-type="INST" onclick="toggleType(this)">Install</div>
+        <div class="day-btn active" data-type="TKRP" onclick="toggleType(this)">Take Report</div>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-dl" onclick="startDownload()">
@@ -325,6 +372,86 @@ input:checked+.slider:before{transform:translateX(20px)}
           <button class="btn btn-outline" onclick="cancelEmail()">✕ Lewati</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: CARI ══════════ -->
+<div id="tab-cari" class="section">
+  <div class="card">
+    <div class="card-header">🔍 Cari Order Berdasarkan Perusahaan</div>
+    <div class="card-body">
+      <label>Nama Perusahaan / Pelanggan</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <input type="text" id="cari-keyword" placeholder="PT HON CHUAN, BANK MANDIRI, ..."
+          onkeydown="if(event.key==='Enter') cariOrder()">
+        <button class="btn btn-primary" onclick="cariOrder()" style="flex-shrink:0">🔍 Cari</button>
+      </div>
+      <div class="alert alert-info mt8" style="font-size:.8rem">
+        Cari dilakukan langsung ke API Galva XEA. Hasil menampilkan status download & merge.
+      </div>
+    </div>
+  </div>
+
+  <div id="cari-loading" class="hidden">
+    <div class="alert alert-info"><span class="spinner"></span> Mencari...</div>
+  </div>
+
+  <div id="cari-result" class="hidden">
+    <div class="card">
+      <div class="card-header" id="cari-result-header">Hasil Pencarian</div>
+      <div class="card-body" style="padding:0">
+        <table>
+          <thead>
+            <tr>
+              <th>Nomor Order</th>
+              <th>Tipe</th>
+              <th>Status</th>
+              <th>Download</th>
+            </tr>
+          </thead>
+          <tbody id="cari-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="cari-empty" class="hidden">
+    <div class="alert alert-warn">Tidak ada order ditemukan untuk kata kunci tersebut.</div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: STATISTIK ══════════ -->
+<div id="tab-statistik" class="section">
+  <div class="card">
+    <div class="card-header">📊 Statistik Merge per Bulan</div>
+    <div class="card-body">
+      <div id="statistik-meta" style="font-size:.82rem;color:var(--gray);margin-bottom:12px">
+        Memuat...
+      </div>
+      <canvas id="statistik-chart" style="max-height:320px"></canvas>
+      <div class="btn-row mt12">
+        <button class="btn btn-outline" onclick="loadStatistik()">🔄 Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="statistik-table-wrap" class="card hidden">
+    <div class="card-header">📋 Detail per Bulan</div>
+    <div class="card-body" style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Bulan</th>
+            <th>Install</th>
+            <th>Maintenance</th>
+            <th>Repair/Service</th>
+            <th>Take Report</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody id="statistik-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -498,20 +625,160 @@ const HARGA = {
 };
 let currentResult = null;
 
+// ── Dark Mode ──────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('xea-theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  setTheme(theme);
+}
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem('xea-theme', theme);
+}
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  setTheme(current === 'dark' ? 'light' : 'dark');
+}
+
 // ── Tab ────────────────────────────────────────────────────
 function showTab(name) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   event.target.classList.add('active');
-  if (name === 'config')   loadConfig();
-  if (name === 'logmerge') loadLogMerge();
-  if (name === 'schedule') loadSchedule();
-  if (name === 'download') loadDlInfo();
-  if (name === 'merge')    loadCfgInfo();
+  if (name === 'config')    loadConfig();
+  if (name === 'logmerge')  loadLogMerge();
+  if (name === 'schedule')  loadSchedule();
+  if (name === 'download')  loadDlInfo();
+  if (name === 'merge')     loadCfgInfo();
+  if (name === 'statistik') loadStatistik();
+  if (name === 'cari')      document.getElementById('cari-keyword').focus();
 }
 
-// ── Versi ──────────────────────────────────────────────────
+function toggleType(el) {
+  el.classList.toggle('active');
+}
+
+function getSelectedTypes() {
+  return [...document.querySelectorAll('.day-btn[data-type].active')]
+    .map(b => b.dataset.type);
+}
+
+// ── Cari ───────────────────────────────────────────────────
+function cariOrder() {
+  const kw = document.getElementById('cari-keyword').value.trim();
+  if (!kw) return;
+
+  document.getElementById('cari-loading').classList.remove('hidden');
+  document.getElementById('cari-result').classList.add('hidden');
+  document.getElementById('cari-empty').classList.add('hidden');
+
+  fetch(`/api/search?q=${encodeURIComponent(kw)}`)
+    .then(r => r.json())
+    .then(r => {
+      document.getElementById('cari-loading').classList.add('hidden');
+      const results = r.results || [];
+      if (results.length === 0) {
+        document.getElementById('cari-empty').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('cari-result-header').textContent =
+        `Hasil Pencarian "${kw}" — ${results.length} order`;
+      const statusColor = { merged:'var(--green)', downloaded:'var(--teal)', new:'var(--gray)' };
+      const statusLabel = { merged:'✓ Dimerge', downloaded:'↓ Diunduh', new:'● Baru' };
+      document.getElementById('cari-tbody').innerHTML = results.map(o =>
+        `<tr>
+          <td style="font-family:monospace;font-size:.82rem">${o.number}</td>
+          <td>${o.type_name||o.type_code}</td>
+          <td style="font-size:.8rem">${o.status}</td>
+          <td><span style="color:${statusColor[o.dl_status]};font-size:.8rem;font-weight:600">
+            ${statusLabel[o.dl_status]}</span></td>
+        </tr>`
+      ).join('');
+      document.getElementById('cari-result').classList.remove('hidden');
+    })
+    .catch(() => {
+      document.getElementById('cari-loading').classList.add('hidden');
+      document.getElementById('cari-empty').innerHTML =
+        '<div class="alert alert-error">Gagal menghubungi server.</div>';
+      document.getElementById('cari-empty').classList.remove('hidden');
+    });
+}
+
+// ── Statistik ──────────────────────────────────────────────
+let _chartInstance = null;
+function loadStatistik() {
+  document.getElementById('statistik-meta').textContent = 'Memuat...';
+  fetch('/api/statistik').then(r => r.json()).then(r => {
+    if (!r.months || r.months.length === 0) {
+      document.getElementById('statistik-meta').textContent =
+        'Belum ada data. Jalankan merge terlebih dahulu.';
+      return;
+    }
+    document.getElementById('statistik-meta').innerHTML =
+      `<b>${r.total_all}</b> pekerjaan tercatat sejak <b>${r.months[0]}</b>`;
+
+    const colors = {
+      'Install'        : '#0891b2',
+      'Maintenance'    : '#059669',
+      'Repair - Service':'#ea580c',
+      'Take Report'    : '#7c3aed',
+    };
+    const tipes = ['Install','Maintenance','Repair - Service','Take Report'];
+
+    if (_chartInstance) _chartInstance.destroy();
+    const ctx = document.getElementById('statistik-chart').getContext('2d');
+    _chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: r.months,
+        datasets: tipes.map(t => ({
+          label: t,
+          data: r.months.map(m => (r.data[m] || {})[t] || 0),
+          backgroundColor: colors[t] + 'cc',
+          borderColor: colors[t],
+          borderWidth: 1,
+          borderRadius: 4,
+        }))
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom',
+            labels: { color: document.documentElement.getAttribute('data-theme') === 'dark'
+              ? '#e2e8f0' : '#0f172a', font: { size: 11 } }
+          }
+        },
+        scales: {
+          x: { stacked: true,
+            ticks: { color: document.documentElement.getAttribute('data-theme') === 'dark'
+              ? '#e2e8f0' : '#0f172a' }},
+          y: { stacked: true, beginAtZero: true,
+            ticks: { color: document.documentElement.getAttribute('data-theme') === 'dark'
+              ? '#e2e8f0' : '#0f172a' }}
+        }
+      }
+    });
+
+    // Tabel detail
+    const tbody = document.getElementById('statistik-tbody');
+    tbody.innerHTML = r.months.map(m => {
+      const d = r.data[m] || {};
+      const total = tipes.reduce((s, t) => s + (d[t]||0), 0);
+      return `<tr>
+        <td><b>${m}</b></td>
+        ${tipes.map(t => `<td>${d[t]||0}</td>`).join('')}
+        <td><b>${total}</b></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('statistik-table-wrap').classList.remove('hidden');
+  }).catch(() => {
+    document.getElementById('statistik-meta').textContent = 'Gagal memuat statistik.';
+  });
+}
 function loadVersion() {
   fetch('/api/version').then(r=>r.json()).then(r=>{
     document.getElementById('ver-tag').textContent = 'v' + r.version;
@@ -560,17 +827,21 @@ function startDownload() {
   const sampai = document.getElementById('dl-sampai').value;
   if (!dari || !sampai) { alert('Isi rentang tanggal terlebih dahulu'); return; }
 
+  const types = getSelectedTypes();
+  if (types.length === 0) { alert('Pilih minimal satu tipe pekerjaan'); return; }
+
   const btn = document.getElementById('btn-dl');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Mengunduh...';
   document.getElementById('dl-log-box').innerHTML = '';
   document.getElementById('dl-result-stats').classList.add('hidden');
+  document.getElementById('dl-lanjut-wrap').classList.add('hidden');
   document.getElementById('dl-progress-wrap').classList.remove('hidden');
   document.getElementById('dl-progress-bar').style.width = '5%';
 
   let qualified = 0; let done = 0;
-
-  const es = new EventSource(`/api/download?dari=${dari}&sampai=${sampai}`);
+  const typeParam = types.join(',');
+  const es = new EventSource(`/api/download?dari=${dari}&sampai=${sampai}&types=${typeParam}`);
   es.onmessage = function(e) {
     const ev = JSON.parse(e.data);
     const t = ev.type; const d = ev.data;
@@ -1082,6 +1353,7 @@ function filterLogContent() {
 
 // ── Init ───────────────────────────────────────────────────
 window.onload = function() {
+  initTheme();
   loadVersion();
   loadDlInfo();
   loadCfgInfo();
@@ -1126,11 +1398,14 @@ def api_download():
 
     dari   = request.args.get("dari", "")
     sampai = request.args.get("sampai", "")
+    types  = request.args.get("types", "")
     try:
         date_from = datetime.strptime(dari,   "%Y-%m-%d").date()
         date_to   = datetime.strptime(sampai, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"error": "Format tanggal salah"}), 400
+
+    type_filter = [t.strip() for t in types.split(",") if t.strip()] if types else None
 
     cfg      = core.load_config()
     username = cfg.get("xea_username", "")
@@ -1149,7 +1424,14 @@ def api_download():
 
     def worker():
         try:
-            dl.run_download(username, password, date_from, date_to, save_dir, cb)
+            result = dl.run_download(username, password, date_from, date_to,
+                                     save_dir, type_filter=type_filter, cb=cb)
+            # Simpan account_name ke config jika ada
+            if result.get("account_name"):
+                cfg2 = core.load_config()
+                cfg2["xea_account_name"] = result["account_name"]
+                core.save_config(cfg2)
+            _state["dl_result"] = result
         except Exception as e:
             q.put({"type": "error", "data": {"msg": str(e)}})
         finally:
@@ -1313,6 +1595,86 @@ def api_apply_update():
         return jsonify({"ok": False, "error": e.stderr.decode() if e.stderr else str(e)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+# ── Search ───────────────────────────────────────────────────
+@app.route("/api/search")
+def api_search():
+    if dl is None:
+        return jsonify({"results": [], "error": "galva_download.py tidak ditemukan"})
+    keyword = request.args.get("q", "").strip()
+    if not keyword:
+        return jsonify({"results": []})
+    cfg      = core.load_config()
+    username = cfg.get("xea_username", "")
+    password = cfg.get("xea_password", "")
+    try:
+        result = dl.search_orders(username, password, keyword)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"results": [], "error": str(e)})
+
+# ── Statistik ────────────────────────────────────────────────
+@app.route("/api/statistik")
+def api_statistik():
+    """Parse log_merge.txt dan return statistik per bulan per tipe."""
+    candidates = [
+        Path("/sdcard/Documents/log_merge.txt"),
+        Path.home() / "Documents" / "log_merge.txt",
+    ]
+    log_path = next((p for p in candidates if p.exists()), None)
+    if not log_path:
+        return jsonify({"months": [], "data": {}, "total_all": 0})
+
+    import re
+    tipe_map = {
+        "Install": "Install",
+        "Maintenance": "Maintenance",
+        "Repair - Service": "Repair - Service",
+        "Take Report": "Take Report",
+    }
+    data       = {}
+    total_all  = 0
+    cur_month  = None
+    cur_tipe   = None
+
+    with open(log_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip()
+            # Baris header: "  MERGE LOG  —  2026-05-22 17:53"
+            m = re.search(r"MERGE LOG\s*[—-]\s*(\d{4}-\d{2})", line)
+            if m:
+                cur_month = m.group(1)  # "2026-05"
+                if cur_month not in data:
+                    data[cur_month] = {}
+                continue
+            # Baris tipe: "  [Maintenance]  —  3 pekerjaan"
+            m = re.search(r"\[(.+?)\]\s*[—-]\s*(\d+)\s*pekerjaan", line)
+            if m and cur_month:
+                tipe_raw = m.group(1)
+                if tipe_raw in tipe_map:
+                    cur_tipe = tipe_map[tipe_raw]
+                    count = int(m.group(2))
+                    data[cur_month][cur_tipe] = \
+                        data[cur_month].get(cur_tipe, 0) + count
+                    total_all += count
+
+    # Format bulan ke "Mei 2026"
+    bulan_id = ["","Jan","Feb","Mar","Apr","Mei","Jun",
+                "Jul","Agu","Sep","Okt","Nov","Des"]
+    def fmt_month(ym):
+        try:
+            y, m = ym.split("-")
+            return f"{bulan_id[int(m)]} {y}"
+        except Exception:
+            return ym
+
+    months_sorted = sorted(data.keys())
+    result = {
+        "months"   : [fmt_month(m) for m in months_sorted],
+        "data"     : {fmt_month(m): data[m] for m in months_sorted},
+        "total_all": total_all,
+    }
+    return jsonify(result)
 
 # ── Log Merge ────────────────────────────────────────────────
 @app.route("/api/log-merge")

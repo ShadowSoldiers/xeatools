@@ -47,14 +47,20 @@ def get_token(username: str, password: str) -> str:
     return token
 
 
-def decode_key_user_id(token: str) -> int:
+def decode_jwt_payload(token: str) -> dict:
+    """Decode JWT payload, return dict claims."""
     try:
         payload_b64  = token.split(".")[1]
         payload_b64 += "=" * (-len(payload_b64) % 4)
-        claims       = json.loads(base64.b64decode(payload_b64).decode("utf-8"))
-        return int(claims["keyuserId"])
+        return json.loads(base64.b64decode(payload_b64).decode("utf-8"))
     except Exception as e:
-        raise Exception(f"Gagal baca keyuserId dari token: {e}")
+        raise Exception(f"Gagal decode JWT: {e}")
+
+def decode_key_user_id(token: str) -> int:
+    return int(decode_jwt_payload(token)["keyuserId"])
+
+def decode_account_name(token: str) -> str:
+    return decode_jwt_payload(token).get("name", "")
 
 
 def make_headers(token: str) -> dict:
@@ -314,9 +320,86 @@ def save_document(support_number: str, doc: dict, save_dir: str) -> str:
 # FUNGSI UTAMA — dipanggil dari merge_web.py
 # ─────────────────────────────────────────────────────────────
 
+def search_orders(username: str, password: str,
+                  keyword: str, cb=None) -> dict:
+    """
+    Cari order berdasarkan nama pelanggan dari API Galva.
+    Kembalikan list order dengan status download/merge.
+    """
+    def emit(event, data):
+        if cb: cb(event, data)
+
+    emit("login", {"username": username})
+    try:
+        token        = get_token(username, password)
+        key_user_id  = decode_key_user_id(token)
+        account_name = decode_account_name(token)
+        emit("login_ok", {"key_user_id": key_user_id, "account_name": account_name})
+    except Exception as e:
+        emit("login_fail", {"msg": str(e)})
+        return {"results": []}
+
+    headers = make_headers(token)
+
+    # Load log untuk cek status
+    dl_log    = load_download_log()
+    try:
+        import merge_core as _core
+        ml_log = _core.load_processed_keys()
+    except Exception:
+        ml_log = set()
+
+    results = []
+    for is_finish in [False, True]:
+        try:
+            resp = requests.get(
+                f"{BASE_URL}/xsyst/api/engineer-service-orders",
+                params={
+                    "keyUserId"         : key_user_id,
+                    "isFinish"          : "true" if is_finish else "false",
+                    "onlyMyTask"        : "true",
+                    "customerDetailName": keyword,
+                    "startDate"         : "",
+                    "endDate"           : "",
+                },
+                headers=headers, timeout=30,
+            )
+            orders = resp.json().get("data", []) or []
+        except Exception:
+            orders = []
+
+        for o in orders:
+            number    = o.get("support_number", "")
+            customer  = o.get("customer_detail_name", "")
+            type_code = o.get("support_type_code", "")
+            type_name = o.get("support_type", "")
+            status    = o.get("current_status_name", "")
+            processed = o.get("latest_processed_date", "")
+
+            stba_file = f"{number}_STBA.pdf".replace("/", "-")
+            stat_file = f"{number}_STAT.pdf".replace("/", "-")
+            in_dl_log  = stba_file in dl_log or stat_file in dl_log
+            in_mg_log  = number.split("/")[-1] in ml_log if number else False
+
+            dl_status = "merged" if in_mg_log else ("downloaded" if in_dl_log else "new")
+            results.append({
+                "number"   : number,
+                "customer" : customer,
+                "type_code": type_code,
+                "type_name": type_name,
+                "status"   : status,
+                "processed": processed,
+                "dl_status": dl_status,
+            })
+
+    return {"results": results}
+
+
 def run_download(username: str, password: str,
                  date_from, date_to,
-                 save_dir: str, cb=None) -> dict:
+                 save_dir: str,
+                 type_filter: list = None,
+                 cb=None) -> dict:
     """
     Jalankan proses download dengan callback untuk streaming.
     Events: login, login_ok, login_fail, fetch, scan,
@@ -330,14 +413,17 @@ def run_download(username: str, password: str,
     # Login
     emit("login", {"username": username})
     try:
-        token       = get_token(username, password)
-        key_user_id = decode_key_user_id(token)
-        emit("login_ok", {"key_user_id": key_user_id})
+        token        = get_token(username, password)
+        key_user_id  = decode_key_user_id(token)
+        account_name = decode_account_name(token)
+        emit("login_ok", {"key_user_id": key_user_id, "account_name": account_name})
     except Exception as e:
         emit("login_fail", {"msg": str(e)})
         return {"success": False, "saved": 0, "skipped": 0, "failed": 0}
 
-    headers = make_headers(token)
+    headers        = make_headers(token)
+    downloaded_log = load_download_log()
+    emit("log_loaded", {"total_logged": len(downloaded_log)})
 
     # Ambil order
     emit("fetch", {"msg": "Mengambil daftar order..."})
@@ -362,10 +448,14 @@ def run_download(username: str, password: str,
             all_orders.append(o)
 
     qualified = []
-    skipped_status = skipped_date = 0
+    skipped_status = skipped_date = skipped_type = 0
     for order in all_orders:
-        if not should_download(order.get("support_type_code", ""),
-                               order.get("current_status_code", "")):
+        type_code = order.get("support_type_code", "")
+        # Filter tipe jika ada
+        if type_filter and type_code not in type_filter:
+            skipped_type += 1
+            continue
+        if not should_download(type_code, order.get("current_status_code", "")):
             skipped_status += 1
             continue
         processed = parse_date(order.get("latest_processed_date"))
@@ -379,6 +469,7 @@ def run_download(username: str, password: str,
         "qualified"     : len(qualified),
         "skipped_status": skipped_status,
         "skipped_date"  : skipped_date,
+        "skipped_type"  : skipped_type,
         "date_from"     : str(date_from),
         "date_to"       : str(date_to),
     })
@@ -435,11 +526,12 @@ def run_download(username: str, password: str,
                 })
 
     result = {
-        "success": True,
-        "saved"  : total_saved,
-        "skipped": total_skip,
-        "failed" : total_fail,
-        "save_dir": save_dir,
+        "success"     : True,
+        "saved"       : total_saved,
+        "skipped"     : total_skip,
+        "failed"      : total_fail,
+        "save_dir"    : save_dir,
+        "account_name": account_name,
     }
     emit("done", result)
     return result
