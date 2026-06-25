@@ -59,11 +59,12 @@ echo -e "${YELLOW}URL publik akan muncul di bawah dalam beberapa detik.${RESET}"
 echo -e "${YELLOW}Tekan Ctrl+C untuk menghentikan tunnel.${RESET}\n"
 
 # Jalankan dan parse URL dari output
-cloudflared tunnel --url http://localhost:$LOCAL_PORT 2>&1 | tee -a "$LOG_FILE" | while IFS= read -r line; do
+cloudflared tunnel --url http://localhost:$LOCAL_PORT --edge-ip-version 4 2>&1 | tee -a "$LOG_FILE" | while IFS= read -r line; do
   echo "$line"
-  # Deteksi URL tunnel yang muncul
-  if echo "$line" | grep -qE "https://[a-z0-9-]+\.trycloudflare\.com"; then
-    URL=$(echo "$line" | grep -oE "https://[a-z0-9-]+\.trycloudflare\.com")
+  # Deteksi URL tunnel — harus ada huruf dan angka random sebelum .trycloudflare.com
+  # Exclude: api.trycloudflare.com (bukan URL tunnel)
+  if echo "$line" | grep -qE "https://[a-z0-9]+-[a-z0-9]+-[a-z0-9-]+\.trycloudflare\.com"; then
+    URL=$(echo "$line" | grep -oE "https://[a-z0-9]+-[a-z0-9]+-[a-z0-9-]+\.trycloudflare\.com")
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════╗${RESET}"
     echo -e "${GREEN}║  URL Publik XEA Tools:                       ║${RESET}"
