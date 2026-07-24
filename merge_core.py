@@ -43,7 +43,7 @@ DEFAULT_CONFIG = {
     "bcc"             : [],
     "subject_template": "Laporan PDF - {tipe_layanan}",
     "body_template"   : (
-        "Halo,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
+        "Dear All,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
         "{daftar_pelanggan}\n\nTerlampir {jumlah_file} file PDF.\n\n"
         "Email ini dikirim otomatis oleh {nama_akun}."
     ),

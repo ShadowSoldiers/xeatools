@@ -544,6 +544,23 @@ input:checked+.slider:before{transform:translateX(20px)}
       <input type="text" id="c-cc">
       <label>BCC (opsional)</label>
       <input type="text" id="c-bcc">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">✉ Template Email</div>
+    <div class="card-body">
+      <label>Subject</label>
+      <input type="text" id="c-subject" placeholder="Laporan PDF - {tipe_layanan}">
+      <label>Isi Email (Body)</label>
+      <textarea id="c-body" rows="7" placeholder="Dear All,..."
+        style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;
+        font-size:.85rem;background:var(--lgray);font-family:monospace;resize:vertical"></textarea>
+      <div class="dim mt8" style="font-size:.78rem;line-height:1.6">
+        Placeholder yang bisa dipakai: <code>{tipe_layanan}</code> <code>{daftar_pelanggan}</code>
+        <code>{jumlah_file}</code> <code>{nama_akun}</code><br>
+        <code>{nama_akun}</code> otomatis terisi nama akun/username login — tidak perlu diketik manual.
+      </div>
       <div class="btn-row mt12">
         <button class="btn btn-primary" onclick="saveConfig()">💾 Simpan Konfigurasi</button>
       </div>
@@ -1199,6 +1216,8 @@ function loadConfig() {
     document.getElementById('c-to').value  = (cfg.to ||[]).join(', ');
     document.getElementById('c-cc').value  = (cfg.cc ||[]).join(', ');
     document.getElementById('c-bcc').value = (cfg.bcc||[]).join(', ');
+    document.getElementById('c-subject').value = cfg.subject_template||'';
+    document.getElementById('c-body').value    = cfg.body_template||'';
   });
 }
 
@@ -1214,6 +1233,8 @@ function saveConfig() {
     to : split(document.getElementById('c-to').value),
     cc : split(document.getElementById('c-cc').value),
     bcc: split(document.getElementById('c-bcc').value),
+    subject_template: document.getElementById('c-subject').value,
+    body_template   : document.getElementById('c-body').value,
   };
   fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(cfg)
