@@ -117,12 +117,24 @@
     
     <div class="card">
       <h2>🚀 Cara Instalasi di Android</h2>
-      <p>Aplikasi ini dirancang untuk berjalan secara lokal di perangkat Android menggunakan <strong>Termux</strong>. Untuk menginstal seluruh kebutuhan (Python, Flask, PyPDF) dan mengonfigurasi otomatis, cukup jalankan perintah berikut di Termux Anda:</p>
-      
+      <p>Aplikasi ini dirancang untuk berjalan secara lokal di perangkat Android menggunakan <strong>Termux</strong>.</p>
+
+      <h3 style="margin-top: 20px;">Langkah 1 — Instal Termux</h3>
+      <p>Jika belum punya Termux, unduh dari F-Droid (<strong>bukan</strong> dari Play Store — versi Play Store sudah lama tidak diperbarui dan tidak disarankan oleh developer Termux sendiri):</p>
+      <p>
+        👉 <a href="https://f-droid.org/packages/com.termux/" target="_blank" rel="noopener">Unduh Termux di F-Droid</a>
+      </p>
+      <p style="font-size: 0.9rem; color: var(--gray);">
+        <em>Cara tercepat: instal aplikasi F-Droid dulu (f-droid.org/F-Droid.apk), lalu cari &amp; instal "Termux" dari dalamnya — supaya otomatis dapat update selanjutnya. Bisa juga unduh file APK Termux langsung dari halaman di atas kalau tidak mau pasang F-Droid.</em>
+      </p>
+
+      <h3 style="margin-top: 20px;">Langkah 2 — Jalankan installer XEA Tools</h3>
+      <p>Buka Termux, lalu jalankan perintah ini. Installer akan otomatis memasang semua kebutuhan (Python, Flask, PyPDF) dan menanyakan konfigurasi (kredensial Galva XEA, email, folder):</p>
+
       <div class="code-block">
-curl -sSL https://raw.githubusercontent.com/ShadowSoldiers/xeatools/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/ditolabs/xeatools/main/install.sh | bash
       </div>
-      
+
       <p style="font-size: 0.9rem; color: var(--gray); margin-top: 10px;">
         <em>Catatan: Installer akan meminta Anda untuk memasukkan kredensial Galva XEA dan opsi konfigurasi email.</em>
       </p>
@@ -163,7 +175,7 @@ bash start_manual.sh
   </div>
 
   <div class="footer">
-    &copy; 2026 PT Galva Technologies Tbk - Developed by ShadowSoldiers
+    &copy; 2026 PT Galva Technologies Tbk - Developed by Ditolabs
   </div>
 
 </body>

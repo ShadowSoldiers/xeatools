@@ -11,11 +11,18 @@
 # ══════════════════════════════════════════════════════════════
 # KONFIGURASI — Ganti sesuai repo GitHub
 # ══════════════════════════════════════════════════════════════
-GITHUB_RAW="https://raw.githubusercontent.com/ShadowSoldiers/xeatools/main"
+GITHUB_RAW="https://raw.githubusercontent.com/ditolabs/xeatools/main"
 INSTALL_DIR="$HOME/merge_pdf"
 BOOT_DIR="$HOME/.termux/boot"
 WIDGET_DIR="$HOME/.shortcuts"
 CONFIG_FILE="$HOME/merge_pdf_config.json"
+
+# ── Pastikan prompt (read) ambil input dari keyboard, bukan dari ──
+# ── stream curl, saat script dijalankan lewat "curl ... | bash"  ──
+if [ -r /dev/tty ]; then
+    exec 0</dev/tty
+fi
+
 
 SCRIPTS=(
     "merge_core.py"
@@ -239,9 +246,9 @@ config = {
     "bcc"             : [],
     "subject_template": "Laporan PDF - {tipe_layanan}",
     "body_template"   : (
-        "Halo,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
+        "Dear All,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
         "{daftar_pelanggan}\n\nTerlampir {jumlah_file} file PDF.\n\n"
-        "Email ini dikirim otomatis oleh script merge_pdf."
+        "Email ini dikirim otomatis oleh {nama_akun}."
     ),
 }
 with open("$CONFIG_FILE", "w", encoding="utf-8") as f:
