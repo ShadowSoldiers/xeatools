@@ -3,9 +3,13 @@
 # ║       PDF Merge Tools — Auto Installer v2                   ║
 # ║       PT Galva Technologies Tbk                             ║
 # ║                                                             ║
-# ║  Cara pakai (di Termux):                                    ║
-# ║    curl -sSL https://raw.githubusercontent.com/             ║
-# ║      NAMA_USER/NAMA_REPO/main/install.sh | bash             ║
+# ║  Cara pakai (di Termux) — download dulu, baru jalankan:     ║
+# ║    curl -sSL -o /tmp/install.sh https://raw.githubusercontent.com/ ║
+# ║      ditolabs/xeatools/main/install.sh && bash /tmp/install.sh ║
+# ║                                                             ║
+# ║  (Bukan "curl | bash" — installer ini butuh input           ║
+# ║   interaktif dari terminal, yang tidak kompatibel dengan    ║
+# ║   pipe dan akan menyebabkan curl error 23.)                 ║
 # ╚══════════════════════════════════════════════════════════════╝
 
 # ══════════════════════════════════════════════════════════════
@@ -16,13 +20,6 @@ INSTALL_DIR="$HOME/merge_pdf"
 BOOT_DIR="$HOME/.termux/boot"
 WIDGET_DIR="$HOME/.shortcuts"
 CONFIG_FILE="$HOME/merge_pdf_config.json"
-
-# ── Pastikan prompt (read) ambil input dari keyboard, bukan dari ──
-# ── stream curl, saat script dijalankan lewat "curl ... | bash"  ──
-if [ -r /dev/tty ]; then
-    exec 0</dev/tty
-fi
-
 
 SCRIPTS=(
     "merge_core.py"

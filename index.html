@@ -132,11 +132,13 @@
       <p>Buka Termux, lalu jalankan perintah ini. Installer akan otomatis memasang semua kebutuhan (Python, Flask, PyPDF) dan menanyakan konfigurasi (kredensial Galva XEA, email, folder):</p>
 
       <div class="code-block">
-curl -sSL https://raw.githubusercontent.com/ditolabs/xeatools/main/install.sh | bash
+curl -sSL -o /tmp/install.sh https://raw.githubusercontent.com/ditolabs/xeatools/main/install.sh &amp;&amp; bash /tmp/install.sh
       </div>
 
       <p style="font-size: 0.9rem; color: var(--gray); margin-top: 10px;">
-        <em>Catatan: Installer akan meminta Anda untuk memasukkan kredensial Galva XEA dan opsi konfigurasi email.</em>
+        <em>Catatan: Installer akan meminta Anda untuk memasukkan kredensial Galva XEA dan opsi konfigurasi email.
+        Perintah di atas mengunduh installer dulu baru menjalankannya — pola <code>curl | bash</code> langsung
+        tidak dipakai karena installer butuh input interaktif dari terminal, yang tidak kompatibel dengan pipe.</em>
       </p>
     </div>
 
