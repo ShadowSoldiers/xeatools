@@ -3,7 +3,7 @@
 # Exit code 42 dari merge_web.py = restart diminta (setelah apply update)
 # Exit code lain = stop normal
 
-INSTALL_DIR="$HOME/xeatools"
+INSTALL_DIR="$HOME/merge_pdf"
 cd "$INSTALL_DIR" || {
   echo "ERROR: Folder $INSTALL_DIR tidak ditemukan."
   exit 1

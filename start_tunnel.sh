@@ -9,7 +9,7 @@ GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'
 RED='\033[0;31m'; RESET='\033[0m'
 
 LOCAL_PORT=5000
-LOG_FILE="$HOME/xeatools/tunnel.log"
+LOG_FILE="$HOME/merge_pdf/tunnel.log"
 
 echo -e "${CYAN}══════════════════════════════════════${RESET}"
 echo -e "${CYAN}  XEA Tools — Cloudflare Tunnel${RESET}"

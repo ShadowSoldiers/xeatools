@@ -1262,7 +1262,7 @@ def api_download():
 
     def worker():
         try:
-            dl.run_download(username, password, date_from, date_to, save_dir, cb)
+            dl.run_download(username, password, date_from, date_to, save_dir, cb=cb)
         except Exception as e:
             q.put({"type": "error", "data": {"msg": str(e)}})
         finally:

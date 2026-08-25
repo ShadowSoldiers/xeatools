@@ -4,10 +4,10 @@
 # Jalankan: bash setup.sh YOUR_GITHUB_TOKEN
 # ─────────────────────────────────────────────────────────────
 
-REPO_USER="ShadowSoldiers"
+REPO_USER="ditolabs"
 REPO_NAME="xeatools"
-REPO_URL="https://github.com/ShadowSoldiers/xeatools.git"
-INSTALL_DIR="$HOME/${REPO_NAME}"
+REPO_URL="https://github.com/ditolabs/xeatools.git"
+INSTALL_DIR="$HOME/merge_pdf"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -36,7 +36,7 @@ if [ -z "$TOKEN" ]; then
   exit 1
 fi
 
-REPO_URL_WITH_TOKEN="https://${TOKEN}@github.com/ShadowSoldiers/xeatools.git"
+REPO_URL_WITH_TOKEN="https://${TOKEN}@github.com/ditolabs/xeatools.git"
 
 # ── Step 0: Fix repo & curl dulu ────────────────────────────
 echo -e "${CYAN}[0/6] Memperbaiki repo Termux...${NC}"

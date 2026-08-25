@@ -45,7 +45,7 @@ DEFAULT_CONFIG = {
     "body_template"   : (
         "Dear All,\n\nBerikut daftar pelanggan untuk Tipe Layanan [{tipe_layanan}]:\n\n"
         "{daftar_pelanggan}\n\nTerlampir {jumlah_file} file PDF.\n\n"
-        "Email ini dikirim otomatis oleh Depo."
+        "Email ini dikirim otomatis oleh {nama_akun}."
     ),
     "schedule_enabled": False,
     "schedule_time"   : "08:00",
@@ -386,18 +386,38 @@ def pindah_file_mentah(source_dir: str, moved_pairs: list) -> tuple:
 # EMAIL
 # ─────────────────────────────────────────────────────────────
 
+class _SafeDict(dict):
+    """Dict yang tidak KeyError saat dipakai format_map — placeholder
+    yang tidak dikenal akan dibiarkan apa adanya, bukan bikin crash."""
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
+def _safe_format(template: str, **kwargs) -> str:
+    """Format string template tanpa KeyError jika ada placeholder
+    (mis. {nama_akun}) yang belum disediakan nilainya."""
+    try:
+        return template.format_map(_SafeDict(**kwargs))
+    except Exception:
+        return template
+
+
 def send_email_subfolder(tipe: str, pdf_files: list,
                          daftar_pelanggan: str, cfg: dict) -> tuple:
     """Kirim 1 email. Kembalikan (ok: bool, pesan: str)"""
     to_list  = cfg.get("to", [])
     cc_list  = cfg.get("cc", [])
     bcc_list = cfg.get("bcc", [])
-    subject  = cfg.get("subject_template", "Laporan PDF - {tipe_layanan}").format(
-                    tipe_layanan=tipe)
-    body     = cfg.get("body_template", "").format(
+    nama_akun = cfg.get("xea_username") or "Depo"
+    subject  = _safe_format(
+                    cfg.get("subject_template", "Laporan PDF - {tipe_layanan}"),
+                    tipe_layanan=tipe, nama_akun=nama_akun)
+    body     = _safe_format(
+                    cfg.get("body_template", ""),
                     tipe_layanan=tipe,
                     daftar_pelanggan=daftar_pelanggan,
-                    jumlah_file=len(pdf_files))
+                    jumlah_file=len(pdf_files),
+                    nama_akun=nama_akun)
     msg = MIMEMultipart()
     msg["From"]    = cfg["sender_email"]
     msg["To"]      = ", ".join(to_list)

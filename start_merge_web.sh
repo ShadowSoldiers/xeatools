@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # start_merge_web.sh — Auto-start via Termux:Boot dengan restart loop
 
-INSTALL_DIR="$HOME/xeatools"
+INSTALL_DIR="$HOME/merge_pdf"
 LOG="$INSTALL_DIR/server.log"
 
 cd "$INSTALL_DIR" || exit 1
