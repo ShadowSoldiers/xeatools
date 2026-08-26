@@ -193,9 +193,30 @@ input:checked+.slider:before{transform:translateX(20px)}
 .hidden{display:none!important}
 .mt8{margin-top:8px}.mt12{margin-top:12px}.dim{color:var(--gray)}
 .bold{font-weight:700}.teal{color:var(--teal)}.green{color:var(--green)}.red{color:var(--red)}
+
+/* Toast notification */
+#toast-container{position:fixed;top:14px;left:50%;transform:translateX(-50%);
+  z-index:999;display:flex;flex-direction:column;gap:8px;width:calc(100% - 28px);max-width:420px}
+.toast{background:var(--navy);color:#fff;border-radius:10px;padding:12px 14px;
+  box-shadow:0 6px 18px rgba(0,0,0,.25);border-left:4px solid var(--teal);
+  display:flex;align-items:flex-start;gap:10px;
+  animation:toast-in .25s ease-out}
+.toast.toast-out{animation:toast-out .2s ease-in forwards}
+@keyframes toast-in{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-12px)}}
+.toast-icon{font-size:1.2rem;line-height:1}
+.toast-body{flex:1;font-size:.85rem;line-height:1.5}
+.toast-title{font-weight:700;margin-bottom:2px}
+.toast-actions{display:flex;gap:8px;margin-top:8px}
+.toast-btn{background:var(--teal);color:#fff;border:none;border-radius:6px;
+  padding:6px 12px;font-size:.78rem;font-weight:600;cursor:pointer}
+.toast-btn.outline{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff}
+.toast-close{background:none;border:none;color:#94a3b8;font-size:1rem;cursor:pointer;line-height:1;padding:0 2px}
 </style>
 </head>
 <body>
+
+<div id="toast-container"></div>
 
 <div class="header">
   <div>
@@ -1226,11 +1247,80 @@ function filterLogContent() {
   document.getElementById('logmerge-content').textContent = out.join('\n');
 }
 
+// ── Toast Notification ───────────────────────────────────────
+function showToast({title, message, icon='ℹ️', actionLabel=null, onAction=null, sticky=false, duration=8000}) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-body">
+      ${title ? `<div class="toast-title">${title}</div>` : ''}
+      <div>${message}</div>
+      <div class="toast-actions" id="toast-actions-${Date.now()}"></div>
+    </div>
+    <button class="toast-close" aria-label="Tutup">✕</button>
+  `;
+  container.appendChild(el);
+
+  const closeToast = () => {
+    el.classList.add('toast-out');
+    setTimeout(() => el.remove(), 200);
+  };
+  el.querySelector('.toast-close').onclick = closeToast;
+
+  if (actionLabel && onAction) {
+    const actions = el.querySelector('.toast-actions');
+    const btn = document.createElement('button');
+    btn.className = 'toast-btn';
+    btn.textContent = actionLabel;
+    btn.onclick = () => { onAction(); closeToast(); };
+    actions.appendChild(btn);
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'toast-btn outline';
+    dismissBtn.textContent = 'Nanti';
+    dismissBtn.onclick = closeToast;
+    actions.appendChild(dismissBtn);
+  }
+
+  if (!sticky) setTimeout(closeToast, duration);
+  return el;
+}
+
+function goToUpdateSection() {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-config').classList.add('active');
+  document.querySelectorAll('.tab')[4].classList.add('active');
+  checkUpdate();
+  setTimeout(() => {
+    const target = document.getElementById('update-info');
+    if (target) target.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 100);
+}
+
+function checkUpdateSilent() {
+  fetch('/api/check-update').then(r => r.json()).then(r => {
+    if (r.has_update) {
+      showToast({
+        icon: '🔄',
+        title: 'Update tersedia',
+        message: `Versi baru siap dipasang (${r.local} → ${r.remote}).` +
+                  (r.changed ? `<br><span class="dim" style="color:#94a3b8">${r.changed}</span>` : ''),
+        actionLabel: '🔍 Lihat Update',
+        onAction: goToUpdateSection,
+        sticky: true,
+      });
+    }
+  }).catch(() => {});
+}
+
 // ── Init ───────────────────────────────────────────────────
 window.onload = function() {
   loadVersion();
   loadDlInfo();
   loadCfgInfo();
+  checkUpdateSilent();
 };
 </script>
 </body>
