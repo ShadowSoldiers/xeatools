@@ -236,6 +236,27 @@ input:checked+.slider:before{transform:translateX(20px)}
           <input type="date" id="dl-sampai">
         </div>
       </div>
+
+      <label>Jenis Pekerjaan</label>
+      <div id="dl-type-filter" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:var(--dark);cursor:pointer">
+          <input type="checkbox" class="dl-type-chk" value="INST" checked style="width:16px;height:16px"> Install
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:var(--dark);cursor:pointer">
+          <input type="checkbox" class="dl-type-chk" value="MAIN" checked style="width:16px;height:16px"> Maintenance
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:var(--dark);cursor:pointer">
+          <input type="checkbox" class="dl-type-chk" value="TKRP" checked style="width:16px;height:16px"> Take Report
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:500;color:var(--dark);cursor:pointer">
+          <input type="checkbox" class="dl-type-chk" value="SERV" checked style="width:16px;height:16px"> Repair / Service
+        </label>
+      </div>
+      <div class="btn-row" style="margin-top:4px">
+        <button class="btn btn-outline" style="font-size:.78rem;padding:6px 12px" onclick="toggleAllDlType(true)">Pilih Semua</button>
+        <button class="btn btn-outline" style="font-size:.78rem;padding:6px 12px" onclick="toggleAllDlType(false)">Kosongkan</button>
+      </div>
+
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-dl" onclick="startDownload()">
           📥 Mulai Download
@@ -568,10 +589,21 @@ function clearDlLog() {
   document.getElementById('dl-progress-wrap').classList.add('hidden');
 }
 
+function toggleAllDlType(state) {
+  document.querySelectorAll('.dl-type-chk').forEach(c => c.checked = state);
+}
+
+function getSelectedDlTypes() {
+  return Array.from(document.querySelectorAll('.dl-type-chk:checked')).map(c => c.value);
+}
+
 function startDownload() {
   const dari   = document.getElementById('dl-dari').value;
   const sampai = document.getElementById('dl-sampai').value;
   if (!dari || !sampai) { alert('Isi rentang tanggal terlebih dahulu'); return; }
+
+  const types = getSelectedDlTypes();
+  if (types.length === 0) { alert('Pilih minimal satu jenis pekerjaan'); return; }
 
   const btn = document.getElementById('btn-dl');
   btn.disabled = true;
@@ -583,7 +615,8 @@ function startDownload() {
 
   let qualified = 0; let done = 0;
 
-  const es = new EventSource(`/api/download?dari=${dari}&sampai=${sampai}`);
+  const typeParam = encodeURIComponent(types.join(','));
+  const es = new EventSource(`/api/download?dari=${dari}&sampai=${sampai}&type_filter=${typeParam}`);
   es.onmessage = function(e) {
     const ev = JSON.parse(e.data);
     const t = ev.type; const d = ev.data;
@@ -594,7 +627,7 @@ function startDownload() {
     else if (t === 'fetch')      appendDlLog(`⟳ ${d.msg}`, 'log-info');
     else if (t === 'scan') {
       qualified = d.qualified;
-      appendDlLog(`📋 Total order: ${d.total}  |  Diproses: ${d.qualified}  |  Skip status: ${d.skipped_status}  |  Skip tanggal: ${d.skipped_date}`, 'log-info');
+      appendDlLog(`📋 Total order: ${d.total}  |  Diproses: ${d.qualified}  |  Skip jenis: ${d.skipped_type||0}  |  Skip status: ${d.skipped_status}  |  Skip tanggal: ${d.skipped_date}`, 'log-info');
       appendDlLog('');
     }
     else if (t === 'download_ok') {
@@ -1245,6 +1278,9 @@ def api_download():
     except ValueError:
         return jsonify({"error": "Format tanggal salah"}), 400
 
+    type_filter_raw = request.args.get("type_filter", "")
+    type_filter = [t.strip() for t in type_filter_raw.split(",") if t.strip()] or None
+
     cfg      = core.load_config()
     username = cfg.get("xea_username", "")
     password = cfg.get("xea_password", "")
@@ -1262,7 +1298,8 @@ def api_download():
 
     def worker():
         try:
-            dl.run_download(username, password, date_from, date_to, save_dir, cb=cb)
+            dl.run_download(username, password, date_from, date_to, save_dir,
+                             type_filter=type_filter, cb=cb)
         except Exception as e:
             q.put({"type": "error", "data": {"msg": str(e)}})
         finally:
