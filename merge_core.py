@@ -487,12 +487,19 @@ def run_merge(source_dir: str, output_dir: str,
     source_path = Path(source_dir)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    # 0. Bersihkan file duplikat (_1, _2, dst) sebelum merge
+    # 0a. Sub-folder bulan hasil (mis. "Agustus 2026") — dibuat berdasarkan
+    #     tanggal saat merge dijalankan. Semua output run ini (folder jenis
+    #     pekerjaan, File Kosong, ringkasan, log) masuk ke sini.
+    bulan_hasil = nama_bulan_indonesia(datetime.now())
+    bulan_root  = out_root / bulan_hasil
+    bulan_root.mkdir(parents=True, exist_ok=True)
+
+    # 0b. Bersihkan file duplikat (_1, _2, dst) sebelum merge
     deleted = cleanup_duplicate_files(output_dir)
     if deleted:
         emit("cleanup", {"deleted": deleted, "jumlah": len(deleted)})
 
-    # 0b. Muat key yang sudah pernah dimerge dari log_merge.txt
+    # 0c. Muat key yang sudah pernah dimerge dari log_merge.txt
     processed_keys = load_processed_keys()
     if processed_keys:
         emit("log_check", {"total_processed": len(processed_keys)})
@@ -546,7 +553,7 @@ def run_merge(source_dir: str, output_dir: str,
 
         nama, tipe, folder_name, serial = extract_stba_info(first_file)
 
-        tipe_folder = out_root / folder_name
+        tipe_folder = bulan_root / folder_name
         tipe_folder.mkdir(parents=True, exist_ok=True)
 
         output_file = tipe_folder / f"{key}.pdf"
@@ -576,7 +583,7 @@ def run_merge(source_dir: str, output_dir: str,
     # 5. File Kosong
     file_kosong_list = []
     if only_first:
-        kosong_folder = out_root / FILE_KOSONG_FOLDER
+        kosong_folder = bulan_root / FILE_KOSONG_FOLDER
         kosong_folder.mkdir(parents=True, exist_ok=True)
         for k in only_first:
             src = pool["FIRST"][k][0]
@@ -601,15 +608,15 @@ def run_merge(source_dir: str, output_dir: str,
 
     # 7. Simpan .txt
     for folder_name, entries in sorted(txt_entries.items()):
-        tipe_folder = out_root / folder_name
+        tipe_folder = bulan_root / folder_name
         txt_path    = tipe_folder / f"daftar_pelanggan_{folder_name}.txt"
         save_note_txt(txt_path, entries)
         emit("txt_saved", {"path": str(txt_path)})
 
-    # 8. Ringkasan total (txt di folder output)
+    # 8. Ringkasan total (txt di dalam sub-folder bulan)
     ringkasan_path = None
     if summary:
-        ringkasan_path = save_ringkasan_total(out_root, summary, file_kosong_list)
+        ringkasan_path = save_ringkasan_total(bulan_root, summary, file_kosong_list)
         emit("ringkasan", {"path": str(ringkasan_path)})
 
     # 8b. Log merge persisten (append ke Documents/log_merge.txt)
@@ -622,10 +629,10 @@ def run_merge(source_dir: str, output_dir: str,
             emit("merge_log_saved", {"path": "", "error": str(e)})
 
     # 9. Log
-    log_path = out_root / LOG_FILE
+    log_path = bulan_root / LOG_FILE
     with open(log_path, "w", encoding="utf-8") as lf:
         lf.write("MERGE LOG\n")
-        lf.write(f"Sumber : {source_dir}\nOutput : {output_dir}\n\n")
+        lf.write(f"Sumber : {source_dir}\nOutput : {bulan_root}\n\n")
         lf.write("\n".join(log_lines))
 
     result = {
@@ -634,11 +641,13 @@ def run_merge(source_dir: str, output_dir: str,
         "file_kosong"     : len(file_kosong_list),
         "only_stats"      : len(only_second),
         "folder_bulan"    : folder_bulan,
+        "bulan_hasil"     : bulan_hasil,
         "summary"         : dict(summary),
         "ringkasan_path"  : str(ringkasan_path) if ringkasan_path else "",
         "merge_log_path"  : str(merge_log_path) if merge_log_path else "",
         "log_path"        : str(log_path),
         "output_dir"      : output_dir,
+        "output_dir_bulan": str(bulan_root),
     }
     emit("done", result)
     return result
@@ -650,50 +659,63 @@ def scan_email_candidates(output_dir: str) -> dict:
     do_send_emails(). Dipakai oleh tab 'Kirim Email' agar tidak bergantung
     pada hasil merge yang masih tersimpan di memori (mis. setelah server
     di-restart atau browser dibuka ulang di sesi lain).
+
+    Struktur folder saat ini: output_dir / <Bulan Tahun> / <Jenis Pekerjaan>.
+    Semua sub-folder bulan ikut dipindai dan digabung per jenis pekerjaan
+    (satu email tetap mencakup semua pekerjaan dgn tipe sama, lintas bulan
+    — dipakai untuk kasus cut-off pekerjaan di akhir bulan). Folder jenis
+    pekerjaan langsung di output_dir (struktur lama, sebelum ada sub-folder
+    bulan) tetap dipindai juga agar file lama tidak "hilang".
     """
     out_root = Path(output_dir)
-    result = {}
+    result = defaultdict(list)
     if not out_root.exists():
-        return result
+        return {}
 
     known_folders = list(TIPE_LAYANAN_MAP.values()) + [FALLBACK_FOLDER]
-    for folder_name in known_folders:
-        folder_path = out_root / folder_name
-        if not folder_path.exists() or not folder_path.is_dir():
-            continue
 
-        # Baca daftar_pelanggan_*.txt untuk mapping key -> (nama, serial)
-        # Format baris: "KEY - Nama [Serial]"
-        info_map = {}
-        txt_path = folder_path / f"daftar_pelanggan_{folder_name}.txt"
-        if txt_path.exists():
-            try:
-                with open(txt_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line or " - " not in line:
-                            continue
-                        key_part, rest = line.split(" - ", 1)
-                        key = key_part.strip()
-                        m = re.match(r"^(.*)\s*\[(.*)\]\s*$", rest.strip())
-                        if m:
-                            nama, serial = m.group(1).strip(), m.group(2).strip()
-                        else:
-                            nama, serial = rest.strip(), "-"
-                        info_map[key] = (nama, serial)
-            except Exception:
-                pass
+    def scan_one(base: Path):
+        for folder_name in known_folders:
+            folder_path = base / folder_name
+            if not folder_path.exists() or not folder_path.is_dir():
+                continue
 
-        entries = []
-        for pdf in sorted(folder_path.glob("*.pdf")):
-            key = pdf.stem
-            nama, serial = info_map.get(key, ("-", "-"))
-            entries.append((key, nama, serial, pdf))
+            # Baca daftar_pelanggan_*.txt untuk mapping key -> (nama, serial)
+            # Format baris: "KEY - Nama [Serial]"
+            info_map = {}
+            txt_path = folder_path / f"daftar_pelanggan_{folder_name}.txt"
+            if txt_path.exists():
+                try:
+                    with open(txt_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or " - " not in line:
+                                continue
+                            key_part, rest = line.split(" - ", 1)
+                            key = key_part.strip()
+                            m = re.match(r"^(.*)\s*\[(.*)\]\s*$", rest.strip())
+                            if m:
+                                nama, serial = m.group(1).strip(), m.group(2).strip()
+                            else:
+                                nama, serial = rest.strip(), "-"
+                            info_map[key] = (nama, serial)
+                except Exception:
+                    pass
 
-        if entries:
-            result[folder_name] = entries
+            for pdf in sorted(folder_path.glob("*.pdf")):
+                key = pdf.stem
+                nama, serial = info_map.get(key, ("-", "-"))
+                result[folder_name].append((key, nama, serial, pdf))
 
-    return result
+    # Sub-folder bulan (struktur baru), mis. "Agustus 2026"
+    for d in sorted(out_root.iterdir()):
+        if d.is_dir() and d.name not in known_folders and d.name != FILE_KOSONG_FOLDER:
+            scan_one(d)
+
+    # Struktur lama: folder jenis pekerjaan langsung di output_dir
+    scan_one(out_root)
+
+    return dict(result)
 
 
 def do_send_emails(summary: dict, cfg: dict, cb=None) -> dict:
