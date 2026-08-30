@@ -868,14 +868,29 @@ function showResult(r) {
   document.getElementById('email-btn-row').classList.remove('hidden');
 }
 
-function retryButtonHtml(fnName) {
-  return `<div class="btn-row mt8"><button class="btn btn-primary" onclick="${fnName}()">🔄 Coba Lagi</button></div>`;
+// Menyimpan konteks batch terakhir yang punya kegagalan, supaya tombol
+// "Coba Lagi" hanya mengirim ulang TIPE YANG GAGAL saja — bukan semua tipe
+// yang tadi dicentang/dikirim. Ini penting karena tipe yang sudah sukses
+// sudah tercatat di email_log.txt (server); kalau ikut dikirim ulang pun
+// server otomatis skip key yang sudah ada di log, tapi supaya jelas &
+// hemat, tombol ini memang hanya menyasar yang gagal.
+let _lastFailedRetry = null;
+
+function retryButtonHtml() {
+  return `<div class="btn-row mt8"><button class="btn btn-primary" onclick="retryFailedEmails()">🔄 Coba Lagi (yang gagal)</button></div>`;
+}
+
+function retryFailedEmails() {
+  if (!_lastFailedRetry) return;
+  const { folders, statusElId, btnRowElId } = _lastFailedRetry;
+  _lastFailedRetry = null;
+  runSendEmail(folders, statusElId, btnRowElId);
 }
 
 // Helper bersama: kirim email via SSE, dengan filter folder opsional dan
 // tombol "Coba Lagi" otomatis kalau ada yang gagal (mis. App Password salah).
 // Dipakai oleh sendEmails() (tab Merge) dan sendSelectedEmails() (tab Kirim Email).
-function runSendEmail(folders, statusElId, btnRowElId, retryFnName) {
+function runSendEmail(folders, statusElId, btnRowElId) {
   const statusEl = document.getElementById(statusElId);
   const btnRow   = document.getElementById(btnRowElId);
   if (btnRow) btnRow.classList.add('hidden');
@@ -894,7 +909,7 @@ function runSendEmail(folders, statusElId, btnRowElId, retryFnName) {
     url += '?folders=' + encodeURIComponent(folders.join(','));
   }
 
-  let hadFail = false, authFail = false;
+  let failedFolders = [], authFail = false;
 
   const es = new EventSource(url);
   es.onmessage = function(e) {
@@ -914,7 +929,7 @@ function runSendEmail(folders, statusElId, btnRowElId, retryFnName) {
     }
     else if (t === 'email_result') {
       if (!d.ok) {
-        hadFail = true;
+        failedFolders.push(d.tipe);
         if (/login gagal|app password/i.test(d.msg || '')) authFail = true;
       }
       if (logEl) logEl.innerHTML +=
@@ -934,30 +949,37 @@ function runSendEmail(folders, statusElId, btnRowElId, retryFnName) {
       if (authFail) {
         statusEl.innerHTML += `<div class="alert alert-warn mt8">🔑 Sepertinya App Password Gmail salah/kadaluarsa. Cek dan perbarui di tab Konfigurasi, lalu coba lagi.</div>`;
       }
-      if (hadFail) {
-        statusEl.innerHTML += retryButtonHtml(retryFnName);
+      if (failedFolders.length > 0) {
+        _lastFailedRetry = { folders: failedFolders, statusElId, btnRowElId };
+        statusEl.innerHTML += retryButtonHtml();
         if (btnRow) btnRow.classList.remove('hidden');
       }
       es.close();
     }
     else if (t === 'error') {
+      // Batch gagal total sebelum sempat ada hasil per-tipe (mis. tidak ada
+      // file) — retry pakai daftar folder yang sama seperti permintaan awal.
       if (alertBox) { alertBox.className = 'alert alert-error'; alertBox.innerHTML = `✗ Error: ${d.msg}`; }
-      statusEl.innerHTML += retryButtonHtml(retryFnName);
+      _lastFailedRetry = { folders, statusElId, btnRowElId };
+      statusEl.innerHTML += retryButtonHtml();
       if (btnRow) btnRow.classList.remove('hidden');
       es.close();
     }
   };
   es.onerror = function() {
     es.close();
+    // Koneksi terputus di tengah jalan — tidak tahu pasti tipe mana yang
+    // belum kekirim, jadi retry pakai daftar folder awal permintaan ini.
+    _lastFailedRetry = { folders, statusElId, btnRowElId };
     statusEl.innerHTML +=
       '<div class="alert alert-error mt8">✗ Koneksi terputus saat kirim email.</div>' +
-      retryButtonHtml(retryFnName);
+      retryButtonHtml();
     if (btnRow) btnRow.classList.remove('hidden');
   };
 }
 
 function sendEmails() {
-  runSendEmail(null, 'email-status', 'email-btn-row', 'sendEmails');
+  runSendEmail(null, 'email-status', 'email-btn-row');
 }
 
 function cancelEmail() {
@@ -1027,7 +1049,7 @@ function sendSelectedEmails() {
     if (el) el.innerHTML = '<div class="alert alert-warn">Pilih minimal satu tipe layanan untuk dikirim.</div>';
     return;
   }
-  runSendEmail(checked, 'email-tab-status', 'email-tab-btn-row', 'sendSelectedEmails');
+  runSendEmail(checked, 'email-tab-status', 'email-tab-btn-row');
 }
 
 // ── Schedule ───────────────────────────────────────────────

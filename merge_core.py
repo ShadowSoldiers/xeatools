@@ -355,6 +355,63 @@ def load_processed_keys() -> set:
     return keys
 
 
+EMAIL_LOG_CANDIDATES = [
+    Path("/sdcard/Documents/email_log.txt"),
+    Path.home() / "Documents" / "email_log.txt",
+]
+
+
+def save_email_log(tipe: str, entries: list):
+    """
+    Catat entri yang BERHASIL dikirim email ke email_log.txt (append-only,
+    tidak bisa dihapus dari GUI — sama seperti log_merge.txt).
+    entries: list of (key, nama, serial, Path)
+    Dipakai load_sent_email_keys() supaya key yang sudah terkirim tidak
+    muncul lagi / tidak terkirim dobel di tab Kirim Email.
+    """
+    log_path = EMAIL_LOG_CANDIDATES[0]
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        log_path = EMAIL_LOG_CANDIDATES[1]
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    lines = [f"{now_str} | {tipe} | {key} - {nama} ({serial})"
+             for key, nama, serial, _ in entries]
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def load_sent_email_keys() -> set:
+    """
+    Baca email_log.txt, ekstrak semua key yang sudah pernah berhasil
+    dikirim lewat email. Dipakai scan_email_candidates() untuk exclude
+    key tsb dari daftar tab Kirim Email — kalau butuh kirim ulang,
+    dilakukan manual di luar aplikasi (file hasil merge tetap tersimpan).
+    """
+    keys = set()
+    for log_path in EMAIL_LOG_CANDIDATES:
+        if not log_path.exists():
+            continue
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or " | " not in line:
+                        continue
+                    parts = line.split(" | ")
+                    if len(parts) < 3:
+                        continue
+                    key = parts[2].split(" - ", 1)[0].strip()
+                    if key:
+                        keys.add(key.upper())
+        except Exception:
+            pass
+        break  # pakai file pertama yang ditemukan
+    return keys
+
+
 def nama_bulan_indonesia(dt: datetime) -> str:
     bulan = ["","Januari","Februari","Maret","April","Mei","Juni",
              "Juli","Agustus","September","Oktober","November","Desember"]
@@ -666,6 +723,11 @@ def scan_email_candidates(output_dir: str) -> dict:
     — dipakai untuk kasus cut-off pekerjaan di akhir bulan). Folder jenis
     pekerjaan langsung di output_dir (struktur lama, sebelum ada sub-folder
     bulan) tetap dipindai juga agar file lama tidak "hilang".
+
+    Key yang sudah pernah berhasil dikirim email (tercatat di
+    email_log.txt) di-exclude dari daftar, supaya tab Kirim Email otomatis
+    "bersih" setelah terkirim dan tidak terkirim dobel. File PDF hasil
+    merge-nya sendiri tidak dihapus/dipindah — tetap tersimpan di folder.
     """
     out_root = Path(output_dir)
     result = defaultdict(list)
@@ -673,6 +735,7 @@ def scan_email_candidates(output_dir: str) -> dict:
         return {}
 
     known_folders = list(TIPE_LAYANAN_MAP.values()) + [FALLBACK_FOLDER]
+    sent_keys = load_sent_email_keys()
 
     def scan_one(base: Path):
         for folder_name in known_folders:
@@ -704,6 +767,8 @@ def scan_email_candidates(output_dir: str) -> dict:
 
             for pdf in sorted(folder_path.glob("*.pdf")):
                 key = pdf.stem
+                if key.upper() in sent_keys:
+                    continue
                 nama, serial = info_map.get(key, ("-", "-"))
                 result[folder_name].append((key, nama, serial, pdf))
 
@@ -723,6 +788,11 @@ def do_send_emails(summary: dict, cfg: dict, cb=None) -> dict:
     Kirim email untuk semua Tipe Layanan.
     Kembalikan {"ok": n, "fail": n, "detail": [(tipe, bool, msg)]}
     Events: email_start, email_result, email_done
+
+    Setiap tipe yang BERHASIL dikirim dicatat ke email_log.txt (lihat
+    save_email_log()) supaya key-nya tidak muncul/terkirim lagi di tab
+    Kirim Email berikutnya. Tipe yang gagal TIDAK dicatat, sehingga
+    otomatis tetap muncul untuk dicoba ulang.
     """
     def emit(ev, data):
         if cb: cb(ev, data)
@@ -742,10 +812,16 @@ def do_send_emails(summary: dict, cfg: dict, cb=None) -> dict:
                                "jumlah_file": len(pdf_files)})
         success, msg = send_email_subfolder(tipe, pdf_files, daftar_str, cfg)
         detail.append((tipe, success, msg))
+        if success:
+            ok += 1
+            try:
+                save_email_log(tipe, entries)
+            except Exception:
+                pass  # kegagalan catat log tidak boleh menggagalkan status kirim
+        else:
+            fail += 1
         emit("email_result", {"tipe": tipe, "ok": success, "msg": msg,
                               "idx": idx, "total": total_tipe})
-        if success: ok += 1
-        else:       fail += 1
 
     emit("email_done", {"ok": ok, "fail": fail})
     return {"ok": ok, "fail": fail, "detail": detail}
